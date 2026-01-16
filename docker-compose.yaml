@@ -1,0 +1,12 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=https://stream.alyza.dev
+    image: aorus22/video-player-web:latest
+    container_name: video-player-web
+    restart: unless-stopped
+    ports:
+      - "6341:5000"
