@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search as SearchIcon, Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,7 +133,14 @@ export function Dashboard() {
                                 <p className="text-muted-foreground text-sm md:text-base">Fast, seekable torrent streaming</p>
                             </div>
                         </div>
-                        <ThemeSwitcher />
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" asChild>
+                                <Link to="/search">
+                                    <SearchIcon className="size-5" />
+                                </Link>
+                            </Button>
+                            <ThemeSwitcher />
+                        </div>
                     </div>
 
                     {/* Add Torrent Card */}
