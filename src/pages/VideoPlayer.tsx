@@ -38,6 +38,13 @@ type SubtitleCue = {
     text: string;
 };
 
+type EmbeddedSubtitle = {
+    index: number;
+    language: string;
+    title: string;
+    codec: string;
+};
+
 export default function VideoPlayer() {
     const [searchParams] = useSearchParams();
     const infoHash = searchParams.get('infoHash') || '';
@@ -61,6 +68,7 @@ export default function VideoPlayer() {
 
     // Subtitle States
     const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+    const [embeddedSubs, setEmbeddedSubs] = useState<EmbeddedSubtitle[]>([]);
     const [subQuery, setSubQuery] = useState("");
     const [subLang, setSubLang] = useState("eng"); // eng, ind
     const [searchingSubs, setSearchingSubs] = useState(false);
@@ -111,9 +119,10 @@ export default function VideoPlayer() {
                 const ext = file.name.split('.').pop()?.toLowerCase();
                 setIsTranscoding(!['mp4', 'webm'].includes(ext || ''));
 
-                const durRes = await fetch(`${API_BASE}/api/duration/${infoHash}/${fileIndex}`);
-                const durData = await durRes.json();
-                if (durData.duration > 0) setDuration(durData.duration);
+                const metaRes = await fetch(`${API_BASE}/api/metadata/${infoHash}/${fileIndex}`);
+                const metaData = await metaRes.json();
+                if (metaData.duration > 0) setDuration(metaData.duration);
+                if (metaData.subtitles) setEmbeddedSubs(metaData.subtitles);
             } catch (err) {
                 console.error("Metadata error", err);
             }
@@ -255,6 +264,27 @@ export default function VideoPlayer() {
             console.error(e);
             setSubtitleCues([]);
             toast.error("Failed to download subtitle");
+        }
+    };
+
+    const selectEmbeddedSubtitle = async (streamIndex: number) => {
+        setSelectedSubId(`embedded-${streamIndex}`);
+        setCurrentSubLink(null); // No link for embedded
+        setSubOffset(0);
+
+        try {
+            const res = await fetch(`${API_BASE}/api/stream/${infoHash}/${fileIndex}/sub/${streamIndex}`);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setSubtitleCues(data);
+                toast.success("Embedded subtitle loaded");
+            } else {
+                setSubtitleCues([]);
+                toast.error("Failed to load embedded subtitle");
+            }
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to load embedded subtitle");
         }
     };
 
@@ -507,23 +537,56 @@ export default function VideoPlayer() {
                                     </div>
 
                                     {/* List */}
-                                    <div className="flex-1 overflow-y-auto max-h-[200px] min-h-[100px] border border-white/5 rounded p-1 bg-white/5 custom-scrollbar">
-                                        {searchingSubs ? <div className="text-center text-xs py-4 text-white/70">Searching...</div> :
-                                            subtitles.length === 0 ? <div className="text-center text-xs text-white/50 py-4">No subtitles found</div> :
-                                                subtitles.map(s => (
+                                    <div className="flex-1 overflow-y-auto max-h-[250px] min-h-[150px] border border-white/5 rounded p-1 bg-white/5 custom-scrollbar">
+                                        {/* Embedded Subtitles */}
+                                        {embeddedSubs.length > 0 && (
+                                            <>
+                                                <div className="text-[10px] uppercase text-white/30 px-2 py-1 font-bold">Embedded</div>
+                                                {embeddedSubs.map(s => (
+                                                    <button
+                                                        key={`embedded-${s.index}`}
+                                                        onClick={() => selectEmbeddedSubtitle(s.index)}
+                                                        className={cn(
+                                                            "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2 mb-1",
+                                                            selectedSubId === `embedded-${s.index}` ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90"
+                                                        )}
+                                                    >
+                                                        <span className="truncate flex-1" title={s.title || `Track ${s.index}`}>{s.title || `Track ${s.index}`}</span>
+                                                        <span className="text-[10px] uppercase bg-white/10 px-1 rounded text-white/70 shrink-0">{s.language || 'UNK'}</span>
+                                                    </button>
+                                                ))}
+                                                {subtitles.length > 0 && <div className="h-px bg-white/5 my-2 mx-1" />}
+                                            </>
+                                        )}
+
+                                        {/* OpenSubtitles */}
+                                        {searchingSubs ? (
+                                            <div className="text-center text-xs py-4 text-white/70">Searching online...</div>
+                                        ) : (
+                                            <>
+                                                {subtitles.length > 0 && embeddedSubs.length > 0 && (
+                                                    <div className="text-[10px] uppercase text-white/30 px-2 py-1 font-bold">OpenSubtitles</div>
+                                                )}
+
+                                                {subtitles.map(s => (
                                                     <button
                                                         key={s.IDSubtitleFile}
                                                         onClick={() => selectSubtitle(s.SubDownloadLink, s.IDSubtitleFile)}
                                                         className={cn(
-                                                            "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2",
+                                                            "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2 mb-1",
                                                             selectedSubId === s.IDSubtitleFile ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90"
                                                         )}
                                                     >
                                                         <span className="truncate flex-1" title={s.SubFileName}>{s.SubFileName}</span>
                                                         <span className="text-[10px] uppercase bg-white/10 px-1 rounded text-white/70 shrink-0">{s.LanguageName}</span>
                                                     </button>
-                                                ))
-                                        }
+                                                ))}
+
+                                                {subtitles.length === 0 && embeddedSubs.length === 0 && (
+                                                    <div className="text-center text-xs text-white/50 py-4">No subtitles found</div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* Settings */}
