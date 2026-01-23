@@ -401,7 +401,7 @@ export default function VideoPlayer() {
                     <div>
                         <h1 className="font-medium text-lg text-left drop-shadow-md">{fileInfo?.name || "Loading..."}</h1>
                         <p className="text-xs text-white/50 text-left">
-                            {isTranscoding ? "Transcoded" : "Direct"} • {fileInfo ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
+                            {isTranscoding ? "Transcoded" : "Direct"} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
                         </p>
                     </div>
                 </button>

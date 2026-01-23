@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Search as SearchIcon, Download, Loader2, HardDrive, Users, Database, ArrowLeft } from "lucide-react";
+import { Search as SearchIcon, Download, Loader2, HardDrive, Users, Database, ArrowLeft, Copy, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,15 +40,47 @@ export function Search() {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [adding, setAdding] = useState<string | null>(null);
+    const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
 
+    // Load state from localStorage on mount
     useEffect(() => {
+        const savedProvider = localStorage.getItem('selectedProvider');
+        const savedQuery = localStorage.getItem('searchQuery');
+        const savedResults = localStorage.getItem('searchResults');
+
         fetch(`${API_BASE}/api/providers`)
             .then(res => res.json())
             .then(data => {
                 setProviders(data || []);
-                if (data && data.length > 0) setSelectedProvider(data[0]);
+                const providerToUse = savedProvider && (data || []).includes(savedProvider) ? savedProvider : (data && data.length > 0 ? data[0] : "");
+                setSelectedProvider(providerToUse);
             });
+
+        if (savedQuery) setQuery(savedQuery);
+        if (savedResults) {
+            try {
+                setResults(JSON.parse(savedResults));
+            } catch (e) {
+                console.error("Failed to parse saved results", e);
+            }
+        }
     }, []);
+
+    // Save provider to localStorage whenever it changes
+    useEffect(() => {
+        if (selectedProvider) {
+            localStorage.setItem('selectedProvider', selectedProvider);
+        }
+    }, [selectedProvider]);
+
+    // Save query and results to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('searchQuery', query);
+    }, [query]);
+
+    useEffect(() => {
+        localStorage.setItem('searchResults', JSON.stringify(results));
+    }, [results]);
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -88,6 +120,12 @@ export function Search() {
         } finally {
             setAdding(null);
         }
+    };
+
+    const copyMagnetLink = (magnet: string) => {
+        navigator.clipboard.writeText(magnet);
+        setCopiedMagnet(magnet);
+        setTimeout(() => setCopiedMagnet(null), 2000);
     };
 
     return (
@@ -159,13 +197,23 @@ export function Search() {
                                     <CardDescription>Uploaded by {result.uploadedBy} on {result.dateUploaded}</CardDescription>
                                 </div>
                                 {result.magnet && (
-                                    <Button 
-                                        onClick={() => addTorrent(result.magnet)}
-                                        disabled={adding === result.magnet}
-                                    >
-                                        {adding === result.magnet ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                        <span className="ml-2 hidden md:inline">Add</span>
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => copyMagnetLink(result.magnet)}
+                                            title="Copy magnet link"
+                                        >
+                                            {copiedMagnet === result.magnet ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                        </Button>
+                                        <Button 
+                                            onClick={() => addTorrent(result.magnet)}
+                                            disabled={adding === result.magnet}
+                                        >
+                                            {adding === result.magnet ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                            <span className="ml-2 hidden md:inline">Add</span>
+                                        </Button>
+                                    </div>
                                 )}
                             </CardHeader>
                         </Card>
