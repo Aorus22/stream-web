@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink } from "lucide-react";
+import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -33,6 +34,7 @@ type TorrentFile = {
 type Torrent = {
     infoHash: string;
     name: string;
+    magnetUri: string;
     totalLength: number;
     downloaded: number;
     downloadSpeed: number;
@@ -53,22 +55,24 @@ export function Dashboard() {
     const [torrents, setTorrents] = useState<Torrent[]>([]);
     const [magnet, setMagnet] = useState("");
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
 
     const fetchTorrents = async () => {
+        setRefreshing(true);
         try {
             const res = await fetch(`${API_BASE}/api/torrents`);
             const data = await res.json();
             setTorrents(data || []);
         } catch (err) {
             console.error(err);
+        } finally {
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
         fetchTorrents();
-        const interval = setInterval(fetchTorrents, 2000);
-        return () => clearInterval(interval);
     }, []);
 
     const addMagnet = async (e: React.FormEvent) => {
@@ -104,6 +108,14 @@ export function Dashboard() {
         navigator.clipboard.writeText(text);
     };
 
+    const killStream = async () => {
+        try {
+            await fetch(`${API_BASE}/api/stream/active`, { method: "DELETE" });
+        } catch (err) {
+            console.error("Failed to kill stream", err);
+        }
+    };
+
     return (
         <TooltipProvider>
             <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
@@ -124,7 +136,7 @@ export function Dashboard() {
                     </div>
 
                     {/* Add Torrent Card */}
-                    <Card className="border-dashed border-2 hover:border-primary/50 transition-colors">
+                    <Card className="border-dashed border-2 transition-colors">
                         <CardContent className="pt-6">
                             <form onSubmit={addMagnet} className="flex flex-col md:flex-row gap-4">
                                 <div className="flex-1 relative">
@@ -164,9 +176,33 @@ export function Dashboard() {
                         <div className="flex items-center gap-3">
                             <div className="h-8 w-1 bg-primary rounded-full" />
                             <h2 className="text-xl font-semibold">Active Torrents</h2>
-                            <Badge variant="secondary" className="ml-auto">
-                                {torrents.length} {torrents.length === 1 ? 'torrent' : 'torrents'}
-                            </Badge>
+                            <div className="ml-auto flex items-center gap-2">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="destructive"
+                                            size="icon"
+                                            onClick={killStream}
+                                            className="h-8 w-8 bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 border"
+                                        >
+                                            <XCircle className="size-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Force Stop Active Stream</TooltipContent>
+                                </Tooltip>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={fetchTorrents}
+                                    disabled={refreshing}
+                                    className="h-8 w-8"
+                                >
+                                    <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+                                </Button>
+                                <Badge variant="secondary">
+                                    {torrents.length} {torrents.length === 1 ? 'torrent' : 'torrents'}
+                                </Badge>
+                            </div>
                         </div>
 
                         {torrents.length === 0 ? (
@@ -182,11 +218,11 @@ export function Dashboard() {
                         ) : (
                             <div className="grid gap-4">
                                 {torrents.map((t) => (
-                                    <Card key={t.infoHash} className="overflow-hidden group hover:ring-1 hover:ring-primary/20 transition-all">
+                                    <Card key={t.infoHash} className="overflow-hidden group transition-all">
                                         <CardHeader className="pb-4">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="min-w-0 flex-1 space-y-2">
-                                                    <CardTitle className="truncate text-lg">
+                                            <div className="flex flex-col md:flex-row items-start justify-between gap-4">
+                                                <div className="min-w-0 w-full md:flex-1 space-y-2">
+                                                    <CardTitle className="text-lg leading-tight break-words" title={t.name}>
                                                         {t.name || "Fetching metadata..."}
                                                     </CardTitle>
                                                     <div className="flex flex-wrap items-center gap-2">
@@ -204,34 +240,49 @@ export function Dashboard() {
                                                         </Badge>
                                                     </div>
                                                 </div>
-                                                <CardAction className="flex items-center gap-3">
+                                                <CardAction className="flex items-center justify-between w-full md:w-auto gap-4 md:mt-0">
                                                     <div className="text-right">
                                                         <div className="text-2xl font-bold tabular-nums">
                                                             {t.progress.toFixed(1)}%
                                                         </div>
                                                         <CardDescription>completed</CardDescription>
                                                     </div>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="text-destructive/60 hover:text-destructive hover:bg-destructive/10">
-                                                                <Trash2 className="size-4" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Remove Torrent?</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    This will stop streaming and remove this torrent from the list.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => removeTorrent(t.infoHash)}>
-                                                                    Remove
-                                                                </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
+                                                    <div className="flex items-center gap-2">
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="text-muted-foreground hover:text-primary"
+                                                                    onClick={() => copyToClipboard(t.magnetUri)}
+                                                                >
+                                                                    <Copy className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Copy Magnet Link</TooltipContent>
+                                                        </Tooltip>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="text-destructive/60 hover:text-destructive hover:bg-destructive/10">
+                                                                    <Trash2 className="size-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Remove Torrent?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        This will stop streaming and remove this torrent from the list.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={() => removeTorrent(t.infoHash)}>
+                                                                        Remove
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
                                                 </CardAction>
                                             </div>
                                             <Progress value={t.progress} className="h-1.5 mt-2" />
@@ -252,7 +303,7 @@ export function Dashboard() {
                                                                 <span className="tabular-nums">{f.progress.toFixed(1)}% ready</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex gap-2 opacity-0 group-hover/file:opacity-100 transition-opacity">
+                                                        <div className="flex gap-2">
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
                                                                     <Button
