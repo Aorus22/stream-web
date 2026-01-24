@@ -160,6 +160,24 @@ export function Dashboard() {
         }
     };
 
+    const removeAllTorrents = async () => {
+        try {
+            await fetch(`${API_BASE}/api/torrents/all`, { method: "DELETE" });
+            fetchTorrents();
+        } catch (err) {
+            console.error("Failed to remove all torrents:", err);
+        }
+    };
+
+    const removeAllCache = async () => {
+        try {
+            await fetch(`${API_BASE}/api/cache/all`, { method: "DELETE" });
+            fetchCachedFiles();
+        } catch (err) {
+            console.error("Failed to remove all cache:", err);
+        }
+    };
+
     // Group cached files by infoHash
     const groupedCache = cachedFiles.reduce((acc, file) => {
         if (!acc[file.infoHash]) {
@@ -229,6 +247,29 @@ export function Dashboard() {
                             <div className="h-8 w-1 bg-primary rounded-full" />
                             <h2 className="text-xl font-semibold">Active Torrents</h2>
                             <div className="ml-auto flex items-center gap-2">
+                                {torrents.length > 0 && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="outline" size="sm" className="text-destructive border-destructive/20 hover:bg-destructive/10">
+                                                Clear All
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Remove All Torrents?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    This will stop and remove all active torrents.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={removeAllTorrents}>
+                                                    Remove All
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button
@@ -405,6 +446,29 @@ export function Dashboard() {
                             <div className="h-8 w-1 bg-green-500 rounded-full" />
                             <h2 className="text-xl font-semibold">Cached Videos</h2>
                             <div className="ml-auto flex items-center gap-2">
+                                {Object.keys(groupedCache).length > 0 && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="outline" size="sm" className="text-destructive border-destructive/20 hover:bg-destructive/10">
+                                                Clear All
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Clear All Cache?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    This will permanently delete all cached video files to free up disk space.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={removeAllCache}>
+                                                    Clear All
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="icon"
