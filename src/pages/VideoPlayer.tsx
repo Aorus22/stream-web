@@ -76,7 +76,7 @@ export default function VideoPlayer() {
     const [currentSubLink, setCurrentSubLink] = useState<string | null>(null);
     const [isAutoSyncing, setIsAutoSyncing] = useState(false);
     const [showLangPopover, setShowLangPopover] = useState(false);
-    const [showPlayFeedback, setShowPlayFeedback] = useState<'play' | 'pause' | null>(null);
+    const [feedback, setFeedback] = useState<{ type: 'play' | 'pause' | 'forward' | 'backward', text?: string, position?: 'left' | 'right' | 'center', id: number } | null>(null);
     const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
     const [bufferedRanges, setBufferedRanges] = useState<{ start: number; end: number }[]>([]);
 
@@ -105,6 +105,16 @@ export default function VideoPlayer() {
     }, [subBottom]);
 
     const controlsTimeoutRef = useRef<number>(0);
+    const feedbackTimeoutRef = useRef<number>(0);
+
+    // Helper for feedback
+    const triggerFeedback = (type: 'play' | 'pause' | 'forward' | 'backward', text?: string, position: 'left' | 'right' | 'center' = 'center') => {
+        if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+        setFeedback({ type, text, position, id: Date.now() });
+        feedbackTimeoutRef.current = window.setTimeout(() => {
+            setFeedback(null);
+        }, 600);
+    };
 
     // 1. Load Metadata
     useEffect(() => {
@@ -165,13 +175,12 @@ export default function VideoPlayer() {
         if (videoRef.current.paused) {
             videoRef.current.play();
             setPlaying(true);
-            setShowPlayFeedback('play');
+            triggerFeedback('play');
         } else {
             videoRef.current.pause();
             setPlaying(false);
-            setShowPlayFeedback('pause');
+            triggerFeedback('pause');
         }
-        setTimeout(() => setShowPlayFeedback(null), 500);
     }, []);
 
     const handleSeek = useCallback((time: number) => {
@@ -198,6 +207,27 @@ export default function VideoPlayer() {
         }
     };
 
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+        const percentage = x / width;
+
+        if (percentage < 0.3) {
+            // Left 30% -> Rewind 10s
+            handleSeek(currentTime - 10);
+            triggerFeedback('backward', '10s', 'left');
+        } else if (percentage > 0.7) {
+            // Right 30% -> Forward 10s
+            handleSeek(currentTime + 10);
+            triggerFeedback('forward', '10s', 'right');
+        } else {
+            // Center -> Fullscreen
+            toggleFullscreen();
+        }
+    };
+
     const handleMouseMove = () => {
         setShowControls(true);
         if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -214,11 +244,13 @@ export default function VideoPlayer() {
             switch (e.key) {
                 case 'ArrowRight':
                     e.preventDefault();
-                    handleSeek(currentTime + (e.shiftKey ? 5 : 10));
+                    handleSeek(currentTime + seekAmount);
+                    triggerFeedback('forward', `${seekAmount}s`, 'right');
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
-                    handleSeek(currentTime - (e.shiftKey ? 5 : 10));
+                    handleSeek(currentTime - seekAmount);
+                    triggerFeedback('backward', `${seekAmount}s`, 'left');
                     break;
                 case ' ':
                     e.preventDefault();
@@ -353,7 +385,7 @@ export default function VideoPlayer() {
             ref={containerRef}
             className="group relative w-full h-screen bg-black overflow-hidden flex items-center justify-center font-sans select-none"
             onMouseMove={handleMouseMove}
-            onDoubleClick={toggleFullscreen}
+            onDoubleClick={handleDoubleClick}
             onClick={handleContainerClick}
         >
             <Toaster position="top-center" />
@@ -373,14 +405,30 @@ export default function VideoPlayer() {
                 {/* No native tracks anymore */}
             </video>
 
-            {/* Play/Pause Feedback */}
-            {showPlayFeedback && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-                    <div className="bg-black/50 rounded-full p-6 animate-ping">
-                        {showPlayFeedback === 'play' ? (
-                            <Play size={48} fill="white" className="text-white ml-1" />
-                        ) : (
-                            <Pause size={48} fill="white" className="text-white" />
+            {/* Play/Pause/Seek Feedback */}
+            {feedback && (
+                <div 
+                    key={feedback.id}
+                    className={cn(
+                    "absolute inset-0 flex items-center pointer-events-none z-40 px-20",
+                    feedback.position === 'left' ? "justify-start" :
+                    feedback.position === 'right' ? "justify-end" :
+                    "justify-center"
+                )}>
+                    <div className="bg-black/50 rounded-full p-5 animate-[ping_0.5s_ease-out_forwards]">
+                        {feedback.type === 'play' && <Play size={48} fill="white" className="text-white ml-1" />}
+                        {feedback.type === 'pause' && <Pause size={48} fill="white" className="text-white" />}
+                        {feedback.type === 'forward' && (
+                            <div className="flex flex-col items-center justify-center w-12 h-12">
+                                <RotateCw size={32} className="text-white" />
+                                <span className="text-white text-[10px] font-bold mt-1 leading-none">+{feedback.text}</span>
+                            </div>
+                        )}
+                        {feedback.type === 'backward' && (
+                            <div className="flex flex-col items-center justify-center w-12 h-12">
+                                <RotateCcw size={32} className="text-white" />
+                                <span className="text-white text-[10px] font-bold mt-1 leading-none">-{feedback.text}</span>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -442,7 +490,9 @@ export default function VideoPlayer() {
             <div className={cn(
                 "absolute bottom-0 left-0 right-0 px-8 pb-8 pt-20 transition-all duration-300 z-20 flex flex-col gap-2",
                 showControls ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-            )}>
+            )}
+            onClick={(e) => e.stopPropagation()}
+            >
 
                 {/* Progress Slider */}
                 <div 
@@ -487,7 +537,7 @@ export default function VideoPlayer() {
                                 isDraggingRef.current = false;
                                 handleSeek(parseFloat((e.target as HTMLInputElement).value));
                             }}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                         />
                     </div>
 
