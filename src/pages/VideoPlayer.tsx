@@ -77,6 +77,7 @@ export default function VideoPlayer() {
     const [isAutoSyncing, setIsAutoSyncing] = useState(false);
     const [showLangPopover, setShowLangPopover] = useState(false);
     const [showPlayFeedback, setShowPlayFeedback] = useState<'play' | 'pause' | null>(null);
+    const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
 
     // Client-Side Rendering State
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
@@ -268,6 +269,7 @@ export default function VideoPlayer() {
     };
 
     const selectEmbeddedSubtitle = async (streamIndex: number) => {
+        setIsLoadingSubtitle(true);
         setSelectedSubId(`embedded-${streamIndex}`);
         setCurrentSubLink(null); // No link for embedded
         setSubOffset(0);
@@ -285,6 +287,8 @@ export default function VideoPlayer() {
         } catch (e) {
             console.error(e);
             toast.error("Failed to load embedded subtitle");
+        } finally {
+            setIsLoadingSubtitle(false);
         }
     };
 
@@ -546,13 +550,19 @@ export default function VideoPlayer() {
                                                     <button
                                                         key={`embedded-${s.index}`}
                                                         onClick={() => selectEmbeddedSubtitle(s.index)}
+                                                        disabled={isLoadingSubtitle}
                                                         className={cn(
                                                             "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2 mb-1",
-                                                            selectedSubId === `embedded-${s.index}` ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90"
+                                                            selectedSubId === `embedded-${s.index}` ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90",
+                                                            isLoadingSubtitle && "opacity-50 cursor-not-allowed"
                                                         )}
                                                     >
                                                         <span className="truncate flex-1" title={s.title || `Track ${s.index}`}>{s.title || `Track ${s.index}`}</span>
-                                                        <span className="text-[10px] uppercase bg-white/10 px-1 rounded text-white/70 shrink-0">{s.language || 'UNK'}</span>
+                                                        {isLoadingSubtitle && selectedSubId === `embedded-${s.index}` ? (
+                                                            <Loader2 size={12} className="animate-spin text-white/90 shrink-0" />
+                                                        ) : (
+                                                            <span className="text-[10px] uppercase bg-white/10 px-1 rounded text-white/70 shrink-0">{s.language || 'UNK'}</span>
+                                                        )}
                                                     </button>
                                                 ))}
                                                 {subtitles.length > 0 && <div className="h-px bg-white/5 my-2 mx-1" />}
