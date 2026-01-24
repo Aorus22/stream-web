@@ -15,12 +15,18 @@ import {
     Search,
     Loader2,
     ExternalLink,
+    Download,
+    HardDrive,
+    Users,
+    Check,
+    Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import {
     Select,
     SelectContent,
@@ -66,6 +72,17 @@ type MediaInfo = {
     episodes: EpisodeInfo[];
 };
 
+type TorrentResult = {
+    name: string;
+    magnet: string;
+    size: string;
+    seeders: string;
+    leechers: string;
+    category: string;
+    uploadedBy: string;
+    dateUploaded: string;
+};
+
 function formatDate(dateStr: string): string {
     if (!dateStr) return "";
     try {
@@ -95,8 +112,30 @@ export function MediaDetail() {
     const [selectedSeason, setSelectedSeason] = useState(1);
     const [episodeSearch, setEpisodeSearch] = useState("");
 
-    // Torrent search state
+    // Torrent panel state
+    const [showTorrentPanel, setShowTorrentPanel] = useState(false);
+    const [torrentResults, setTorrentResults] = useState<TorrentResult[]>([]);
     const [searchingTorrents, setSearchingTorrents] = useState(false);
+    const [torrentQuery, setTorrentQuery] = useState("");
+    const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null);
+    const [providers, setProviders] = useState<string[]>([]);
+    const [selectedProvider, setSelectedProvider] = useState("");
+    const [addingTorrent, setAddingTorrent] = useState<string | null>(null);
+    const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
+
+    // Fetch providers on mount
+    useEffect(() => {
+        fetch(`${API_BASE}/api/providers`)
+            .then(res => res.json())
+            .then(data => {
+                setProviders(data || []);
+                if (data && data.length > 0) {
+                    const saved = localStorage.getItem('selectedProvider');
+                    setSelectedProvider(saved && data.includes(saved) ? saved : data[0]);
+                }
+            })
+            .catch(console.error);
+    }, []);
 
     // Fetch media detail
     useEffect(() => {
@@ -155,16 +194,58 @@ export function MediaDetail() {
     }, [detail?.episodes, selectedSeason, episodeSearch]);
 
     // Search torrents for this media
-    const searchTorrents = async () => {
-        if (!detail) return;
-        setSearchingTorrents(true);
-
-        // Navigate to search page with pre-filled query
-        const query = detail.mediaType === "series" 
-            ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}` 
-            : `${detail.title} ${detail.year || ""}`;
+    const searchTorrents = async (query?: string, episode?: EpisodeInfo) => {
+        if (!detail || !selectedProvider) return;
         
-        navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+        const searchQuery = query || (detail.mediaType === "series" 
+            ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}` 
+            : `${detail.title} ${detail.year || ""}`);
+        
+        setTorrentQuery(searchQuery);
+        setSelectedEpisode(episode || null);
+        setShowTorrentPanel(true);
+        setSearchingTorrents(true);
+        setTorrentResults([]);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(searchQuery.trim())}`
+            );
+            const data = await res.json();
+            // Ensure data is an array
+            setTorrentResults(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error("Failed to search torrents:", err);
+            setTorrentResults([]);
+        } finally {
+            setSearchingTorrents(false);
+        }
+    };
+
+    // Add torrent to client
+    const addTorrent = async (magnet: string) => {
+        setAddingTorrent(magnet);
+        try {
+            const res = await fetch(`${API_BASE}/api/add`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: `magnet=${encodeURIComponent(magnet)}`
+            });
+            if (!res.ok) throw new Error("Failed to add torrent");
+            // Navigate to dashboard to see the torrent
+            navigate("/dashboard");
+        } catch (err) {
+            console.error("Failed to add torrent:", err);
+        } finally {
+            setAddingTorrent(null);
+        }
+    };
+
+    // Copy magnet link
+    const copyMagnet = (magnet: string) => {
+        navigator.clipboard.writeText(magnet);
+        setCopiedMagnet(magnet);
+        setTimeout(() => setCopiedMagnet(null), 2000);
     };
 
     // Open trailer
@@ -372,8 +453,8 @@ export function MediaDetail() {
                                     </Button>
                                 )}
                                 <Button
-                                    onClick={searchTorrents}
-                                    disabled={searchingTorrents}
+                                    onClick={() => searchTorrents()}
+                                    disabled={searchingTorrents || !selectedProvider}
                                     className="gap-2 bg-primary hover:bg-primary/90"
                                 >
                                     {searchingTorrents ? (
@@ -474,7 +555,7 @@ export function MediaDetail() {
                                                     className="flex gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group"
                                                     onClick={() => {
                                                         const query = `${detail.title} S${String(episode.season).padStart(2, '0')}E${String(episode.episode).padStart(2, '0')}`;
-                                                        navigate(`/search?q=${encodeURIComponent(query)}`);
+                                                        searchTorrents(query, episode);
                                                     }}
                                                 >
                                                     {/* Episode Thumbnail */}
@@ -515,6 +596,149 @@ export function MediaDetail() {
                     </div>
                 </div>
             </div>
+
+            {/* Torrent Panel - Slide in from right */}
+            {showTorrentPanel && (
+                <div className="fixed inset-0 z-50 flex justify-end">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowTorrentPanel(false)}
+                    />
+                    
+                    {/* Panel */}
+                    <div className="relative w-full max-w-md bg-background/95 backdrop-blur-md border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300">
+                        {/* Header */}
+                        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 flex-shrink-0"
+                                    onClick={() => setShowTorrentPanel(false)}
+                                >
+                                    <ChevronLeft className="size-4" />
+                                </Button>
+                                <div className="min-w-0">
+                                    <h3 className="font-semibold truncate">
+                                        {selectedEpisode 
+                                            ? `S${selectedEpisode.season}E${selectedEpisode.episode} ${selectedEpisode.title}`
+                                            : detail.title
+                                        }
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground truncate">{torrentQuery}</p>
+                                </div>
+                            </div>
+                            <Select value={selectedProvider} onValueChange={(v) => {
+                                setSelectedProvider(v);
+                                localStorage.setItem('selectedProvider', v);
+                            }}>
+                                <SelectTrigger className="w-[120px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {providers.map(p => (
+                                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="p-4 border-b border-white/10">
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                searchTorrents(torrentQuery);
+                            }} className="flex gap-2">
+                                <Input
+                                    value={torrentQuery}
+                                    onChange={(e) => setTorrentQuery(e.target.value)}
+                                    placeholder="Search query..."
+                                    className="flex-1"
+                                />
+                                <Button type="submit" size="icon" disabled={searchingTorrents}>
+                                    {searchingTorrents ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                        <Search className="size-4" />
+                                    )}
+                                </Button>
+                            </form>
+                        </div>
+
+                        {/* Results */}
+                        <div className="flex-1 overflow-y-auto h-[calc(100vh-180px)] w-full">
+                            <div className="flex flex-col gap-3 p-4 w-full">
+                                {searchingTorrents ? (
+                                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                        <Loader2 className="size-8 animate-spin text-primary" />
+                                        <p className="text-sm text-muted-foreground">Searching torrents...</p>
+                                    </div>
+                                ) : !Array.isArray(torrentResults) || torrentResults.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground">
+                                        <Search className="size-12 mx-auto mb-4 opacity-20" />
+                                        <p>No torrents found</p>
+                                        <p className="text-xs mt-1">Try a different search query</p>
+                                    </div>
+                                ) : (
+                                    torrentResults.map((torrent, i) => (
+                                        <Card key={i} className="p-4 space-y-3 hover:bg-muted/50 transition-colors w-full relative">
+                                            <h4 className="text-sm font-medium leading-normal line-clamp-2 break-words pr-2">
+                                                {torrent.name}
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Badge variant="outline" className="text-xs gap-1">
+                                                    <HardDrive className="size-3" />
+                                                    {torrent.size}
+                                                </Badge>
+                                                <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-600/30">
+                                                    <Users className="size-3" />
+                                                    {torrent.seeders}
+                                                </Badge>
+                                                {torrent.category && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {torrent.category}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {torrent.magnet && (
+                                                <div className="flex gap-2 pt-1">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex-1 gap-1.5"
+                                                        onClick={() => copyMagnet(torrent.magnet)}
+                                                    >
+                                                        {copiedMagnet === torrent.magnet ? (
+                                                            <Check className="size-3" />
+                                                        ) : (
+                                                            <Copy className="size-3" />
+                                                        )}
+                                                        Copy
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        className="flex-1 gap-1.5"
+                                                        onClick={() => addTorrent(torrent.magnet)}
+                                                        disabled={addingTorrent === torrent.magnet}
+                                                    >
+                                                        {addingTorrent === torrent.magnet ? (
+                                                            <Loader2 className="size-3 animate-spin" />
+                                                        ) : (
+                                                            <Download className="size-3" />
+                                                        )}
+                                                        Add
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </Card>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Cast Section (for movies or additional cast display) */}
             {detail.cast && detail.cast.length > 6 && (

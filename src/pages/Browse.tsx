@@ -265,6 +265,29 @@ export function Browse() {
         fetchCategory();
     }, [category, activeTab, categorySkip, selectedGenre]);
 
+    // Re-run search when activeTab changes
+    useEffect(() => {
+        if (hasSearched && searchQuery) {
+            const performSearch = async () => {
+                setIsSearching(true);
+                setSearchResults([]);
+                try {
+                    const mediaType = activeTab;
+                    const res = await fetch(
+                        `${API_BASE}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
+                    );
+                    const data: CatalogResponse = await res.json();
+                    setSearchResults(data.results || []);
+                } catch (err) {
+                    console.error("Failed to search:", err);
+                } finally {
+                    setIsSearching(false);
+                }
+            };
+            performSearch();
+        }
+    }, [activeTab]);
+
     // Search handler
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -329,10 +352,74 @@ export function Browse() {
             </header>
 
             <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
-                {/* Search Results */}
-                {(searchQuery || hasSearched) && (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as "movies" | "series"); setCategorySkip(0); }}>
+                    <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                        <TabsList className="bg-muted/50">
+                            <TabsTrigger value="movies" className="gap-2">
+                                <Film className="size-4" />
+                                Movies
+                            </TabsTrigger>
+                            <TabsTrigger value="series" className="gap-2">
+                                <Tv className="size-4" />
+                                TV Series
+                            </TabsTrigger>
+                        </TabsList>
+
+                        {/* Category Filter - Only show when not searching */}
+                        {!searchQuery && !hasSearched && (
+                            <div className="flex gap-2 flex-wrap items-center">
+                                <Button
+                                    variant={category === "popular" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => { setCategory("popular"); setCategorySkip(0); }}
+                                    className="gap-1.5"
+                                >
+                                    <TrendingUp className="size-4" />
+                                    Popular
+                                </Button>
+                                <Button
+                                    variant={category === "top-rated" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => { setCategory("top-rated"); setCategorySkip(0); }}
+                                    className="gap-1.5"
+                                >
+                                    <Star className="size-4 fill-current" />
+                                    Top Rated
+                                </Button>
+                                
+                                {/* Genre Dropdown */}
+                                <div className="flex items-center gap-1">
+                                    <Select 
+                                        value={selectedGenre} 
+                                        onValueChange={(value) => {
+                                            setSelectedGenre(value);
+                                            setCategory("genre");
+                                            setCategorySkip(0);
+                                        }}
+                                    >
+                                        <SelectTrigger className={cn(
+                                            "w-[140px] h-8",
+                                            category === "genre" ? "border-primary" : ""
+                                        )}>
+                                            <Filter className="size-4 mr-1" />
+                                            <SelectValue placeholder="Genre" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {GENRES.map((genre) => (
+                                                <SelectItem key={genre} value={genre}>
+                                                    {genre}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Search Results Header */}
+                    {(searchQuery || hasSearched) && (
+                        <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold">
                                 {isSearching ? "Searching..." : `Search results for "${searchQuery}"`}
                             </h2>
@@ -340,90 +427,27 @@ export function Browse() {
                                 Clear
                             </Button>
                         </div>
-                        {isSearching ? (
-                            <MediaGrid items={[]} loading={true} />
-                        ) : searchResults.length > 0 ? (
-                            <MediaGrid items={searchResults} loading={false} />
-                        ) : hasSearched ? (
-                            <div className="text-center py-12 text-muted-foreground">
-                                <p>No results found for "{searchQuery}"</p>
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 text-muted-foreground">
-                                <p>Press Enter to search</p>
-                            </div>
-                        )}
-                    </div>
-                )}
+                    )}
 
-                {/* Main Content (hidden when showing search results) */}
-                {!searchQuery && !hasSearched && (
-                    <>
-                        {/* Tabs */}
-                        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as "movies" | "series"); setCategorySkip(0); }}>
-                            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-                                <TabsList className="bg-muted/50">
-                                    <TabsTrigger value="movies" className="gap-2">
-                                        <Film className="size-4" />
-                                        Movies
-                                    </TabsTrigger>
-                                    <TabsTrigger value="series" className="gap-2">
-                                        <Tv className="size-4" />
-                                        TV Series
-                                    </TabsTrigger>
-                                </TabsList>
-
-                                {/* Category Filter */}
-                                <div className="flex gap-2 flex-wrap items-center">
-                                    <Button
-                                        variant={category === "popular" ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => { setCategory("popular"); setCategorySkip(0); }}
-                                        className="gap-1.5"
-                                    >
-                                        <TrendingUp className="size-4" />
-                                        Popular
-                                    </Button>
-                                    <Button
-                                        variant={category === "top-rated" ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => { setCategory("top-rated"); setCategorySkip(0); }}
-                                        className="gap-1.5"
-                                    >
-                                        <Star className="size-4 fill-current" />
-                                        Top Rated
-                                    </Button>
-                                    
-                                    {/* Genre Dropdown */}
-                                    <div className="flex items-center gap-1">
-                                        <Select 
-                                            value={selectedGenre} 
-                                            onValueChange={(value) => {
-                                                setSelectedGenre(value);
-                                                setCategory("genre");
-                                                setCategorySkip(0);
-                                            }}
-                                        >
-                                            <SelectTrigger className={cn(
-                                                "w-[140px] h-8",
-                                                category === "genre" ? "border-primary" : ""
-                                            )}>
-                                                <Filter className="size-4 mr-1" />
-                                                <SelectValue placeholder="Genre" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {GENRES.map((genre) => (
-                                                    <SelectItem key={genre} value={genre}>
-                                                        {genre}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                    <TabsContent value="movies" className="space-y-8">
+                        {(searchQuery || hasSearched) ? (
+                            /* Search Results Grid */
+                            isSearching ? (
+                                <MediaGrid items={[]} loading={true} />
+                            ) : searchResults.length > 0 ? (
+                                <MediaGrid items={searchResults} loading={false} />
+                            ) : hasSearched ? (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <p>No results found for "{searchQuery}" in Movies</p>
                                 </div>
-                            </div>
-
-                            <TabsContent value="movies" className="space-y-8">
+                            ) : (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <p>Press Enter to search</p>
+                                </div>
+                            )
+                        ) : (
+                            /* Browse Content */
+                            <>
                                 {/* Featured Grid */}
                                 <MediaGrid items={categoryItems} loading={categoryLoading} />
 
@@ -465,9 +489,29 @@ export function Browse() {
                                     loading={loadingMovies}
                                     icon={Star}
                                 />
-                            </TabsContent>
+                            </>
+                        )}
+                    </TabsContent>
 
-                            <TabsContent value="series" className="space-y-8">
+                    <TabsContent value="series" className="space-y-8">
+                        {(searchQuery || hasSearched) ? (
+                            /* Search Results Grid */
+                            isSearching ? (
+                                <MediaGrid items={[]} loading={true} />
+                            ) : searchResults.length > 0 ? (
+                                <MediaGrid items={searchResults} loading={false} />
+                            ) : hasSearched ? (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <p>No results found for "{searchQuery}" in TV Series</p>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <p>Press Enter to search</p>
+                                </div>
+                            )
+                        ) : (
+                            /* Browse Content */
+                            <>
                                 {/* Featured Grid */}
                                 <MediaGrid items={categoryItems} loading={categoryLoading} />
 
@@ -509,10 +553,10 @@ export function Browse() {
                                     loading={loadingSeries}
                                     icon={Star}
                                 />
-                            </TabsContent>
-                        </Tabs>
-                    </>
-                )}
+                            </>
+                        )}
+                    </TabsContent>
+                </Tabs>
             </main>
         </div>
     );
