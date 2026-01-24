@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Search as SearchIcon, Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle, Folder, FileVideo } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +19,6 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -44,6 +42,20 @@ type Torrent = {
     files: TorrentFile[];
 };
 
+type CachedFile = {
+    name: string;
+    path: string;
+    size: number;
+    infoHash: string;
+    fileIndex: number;
+};
+
+type CacheStats = {
+    totalSize: number;
+    fileCount: number;
+    cacheDir: string;
+};
+
 const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -54,9 +66,12 @@ const formatBytes = (bytes: number) => {
 
 export function Dashboard() {
     const [torrents, setTorrents] = useState<Torrent[]>([]);
+    const [cachedFiles, setCachedFiles] = useState<CachedFile[]>([]);
+    const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
     const [magnet, setMagnet] = useState("");
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [refreshingCache, setRefreshingCache] = useState(false);
     const [error, setError] = useState("");
 
     const fetchTorrents = async () => {
@@ -72,8 +87,27 @@ export function Dashboard() {
         }
     };
 
+    const fetchCachedFiles = async () => {
+        setRefreshingCache(true);
+        try {
+            const [filesRes, statsRes] = await Promise.all([
+                fetch(`${API_BASE}/api/cache`),
+                fetch(`${API_BASE}/api/cache/stats`)
+            ]);
+            const files = await filesRes.json();
+            const stats = await statsRes.json();
+            setCachedFiles(files || []);
+            setCacheStats(stats);
+        } catch (err) {
+            console.error("Failed to fetch cache:", err);
+        } finally {
+            setRefreshingCache(false);
+        }
+    };
+
     useEffect(() => {
         fetchTorrents();
+        fetchCachedFiles();
     }, []);
 
     const addMagnet = async (e: React.FormEvent) => {
@@ -117,6 +151,24 @@ export function Dashboard() {
         }
     };
 
+    const deleteCachedFolder = async (infoHash: string) => {
+        try {
+            await fetch(`${API_BASE}/api/cache/${infoHash}`, { method: "DELETE" });
+            fetchCachedFiles();
+        } catch (err) {
+            console.error("Failed to delete cache:", err);
+        }
+    };
+
+    // Group cached files by infoHash
+    const groupedCache = cachedFiles.reduce((acc, file) => {
+        if (!acc[file.infoHash]) {
+            acc[file.infoHash] = [];
+        }
+        acc[file.infoHash].push(file);
+        return acc;
+    }, {} as Record<string, CachedFile[]>);
+
     return (
         <TooltipProvider>
             <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
@@ -132,14 +184,6 @@ export function Dashboard() {
                                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">TorrentStream</h1>
                                 <p className="text-muted-foreground text-sm md:text-base">Fast, seekable torrent streaming</p>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" asChild>
-                                <Link to="/search">
-                                    <SearchIcon className="size-5" />
-                                </Link>
-                            </Button>
-                            <ThemeSwitcher />
                         </div>
                     </div>
 
@@ -339,6 +383,126 @@ export function Dashboard() {
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => window.location.href = `/watch?infoHash=${t.infoHash}&fileIndex=${i}`}
+                                                                className="gap-1.5"
+                                                            >
+                                                                <Play className="size-4" fill="currentColor" />
+                                                                Play
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Cached Videos Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-8 w-1 bg-green-500 rounded-full" />
+                            <h2 className="text-xl font-semibold">Cached Videos</h2>
+                            <div className="ml-auto flex items-center gap-2">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={fetchCachedFiles}
+                                    disabled={refreshingCache}
+                                    className="h-8 w-8"
+                                >
+                                    <RefreshCw className={cn("size-4", refreshingCache && "animate-spin")} />
+                                </Button>
+                                {cacheStats && (
+                                    <Badge variant="secondary" className="gap-1.5">
+                                        <HardDrive className="size-3" />
+                                        {formatBytes(cacheStats.totalSize)}
+                                    </Badge>
+                                )}
+                                <Badge variant="outline">
+                                    {Object.keys(groupedCache).length} folders
+                                </Badge>
+                            </div>
+                        </div>
+
+                        {Object.keys(groupedCache).length === 0 ? (
+                            <Empty className="border rounded-2xl py-12 min-h-[200px]">
+                                <EmptyMedia variant="icon">
+                                    <Folder />
+                                </EmptyMedia>
+                                <EmptyTitle>No cached videos</EmptyTitle>
+                                <EmptyDescription>
+                                    Downloaded video files will appear here
+                                </EmptyDescription>
+                            </Empty>
+                        ) : (
+                            <div className="grid gap-4">
+                                {Object.entries(groupedCache).map(([infoHash, files]) => (
+                                    <Card key={infoHash} className="overflow-hidden">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0 flex-1 space-y-1">
+                                                    <CardTitle className="text-base font-mono truncate" title={infoHash}>
+                                                        {infoHash.substring(0, 16)}...
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        {files.length} video{files.length !== 1 ? 's' : ''} • {formatBytes(files.reduce((sum, f) => sum + f.size, 0))}
+                                                    </CardDescription>
+                                                </div>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="text-destructive/60 hover:text-destructive hover:bg-destructive/10">
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Delete Cached Files?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will permanently delete all cached files for this torrent. This action cannot be undone.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => deleteCachedFolder(infoHash)}>
+                                                                Delete
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-0">
+                                            <div className="space-y-1">
+                                                {files.map((file, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                            <FileVideo className="size-5 text-muted-foreground flex-shrink-0" />
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-sm font-medium truncate">{file.name}</div>
+                                                                <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon-sm"
+                                                                        onClick={() => copyToClipboard(`${API_BASE}/stream/${infoHash}/${file.fileIndex}`)}
+                                                                    >
+                                                                        <Copy className="size-4" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>Copy Stream URL</TooltipContent>
+                                                            </Tooltip>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex}`}
                                                                 className="gap-1.5"
                                                             >
                                                                 <Play className="size-4" fill="currentColor" />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Search as SearchIcon, Download, Loader2, HardDrive, Users, Database, ArrowLeft, Copy, Check } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Search as SearchIcon, Download, Loader2, HardDrive, Users, Database, Copy, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -34,6 +33,7 @@ type SearchResult = {
 };
 
 export function Search() {
+    const [searchParams] = useSearchParams();
     const [providers, setProviders] = useState<string[]>([]);
     const [selectedProvider, setSelectedProvider] = useState("");
     const [query, setQuery] = useState("");
@@ -41,9 +41,11 @@ export function Search() {
     const [loading, setLoading] = useState(false);
     const [adding, setAdding] = useState<string | null>(null);
     const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
+    const [initialSearchDone, setInitialSearchDone] = useState(false);
 
     // Load state from localStorage on mount
     useEffect(() => {
+        const urlQuery = searchParams.get('q');
         const savedProvider = localStorage.getItem('selectedProvider');
         const savedQuery = localStorage.getItem('searchQuery');
         const savedResults = localStorage.getItem('searchResults');
@@ -54,17 +56,24 @@ export function Search() {
                 setProviders(data || []);
                 const providerToUse = savedProvider && (data || []).includes(savedProvider) ? savedProvider : (data && data.length > 0 ? data[0] : "");
                 setSelectedProvider(providerToUse);
+                
+                // If there's a URL query param, use it and trigger search
+                if (urlQuery) {
+                    setQuery(urlQuery);
+                    setInitialSearchDone(false);
+                } else if (savedQuery) {
+                    setQuery(savedQuery);
+                }
             });
 
-        if (savedQuery) setQuery(savedQuery);
-        if (savedResults) {
+        if (!urlQuery && savedResults) {
             try {
                 setResults(JSON.parse(savedResults));
             } catch (e) {
                 console.error("Failed to parse saved results", e);
             }
         }
-    }, []);
+    }, [searchParams]);
 
     // Save provider to localStorage whenever it changes
     useEffect(() => {
@@ -82,8 +91,16 @@ export function Search() {
         localStorage.setItem('searchResults', JSON.stringify(results));
     }, [results]);
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // Auto-search when URL query param is provided
+    useEffect(() => {
+        const urlQuery = searchParams.get('q');
+        if (urlQuery && selectedProvider && !initialSearchDone && query === urlQuery) {
+            setInitialSearchDone(true);
+            performSearch();
+        }
+    }, [query, selectedProvider, initialSearchDone, searchParams]);
+
+    const performSearch = async () => {
         if (!query || !selectedProvider) return;
 
         setLoading(true);
@@ -104,6 +121,11 @@ export function Search() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        performSearch();
     };
 
     const addTorrent = async (magnet: string) => {
@@ -134,11 +156,6 @@ export function Search() {
                  {/* Header */}
                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" asChild>
-                            <Link to="/">
-                                <ArrowLeft className="size-6" />
-                            </Link>
-                        </Button>
                         <div className="p-3 bg-primary/10 rounded-2xl ring-1 ring-primary/20">
                             <SearchIcon className="size-8 text-primary" />
                         </div>
@@ -147,7 +164,6 @@ export function Search() {
                             <p className="text-muted-foreground text-sm md:text-base">Search for torrents across multiple providers</p>
                         </div>
                     </div>
-                    <ThemeSwitcher />
                 </div>
 
                 <Card>

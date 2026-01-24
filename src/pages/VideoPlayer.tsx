@@ -65,6 +65,7 @@ export default function VideoPlayer() {
     const [isTranscoding, setIsTranscoding] = useState(false);
     const [seekOffset, setSeekOffset] = useState(0);
     const isDraggingRef = useRef(false); // Use ref to avoid stale closure in useEffect
+    const seekAmount = 10; // seconds to seek with arrow keys
 
     // Subtitle States
     const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
