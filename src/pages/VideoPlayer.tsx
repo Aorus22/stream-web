@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Captions, Search, Type, ArrowUp, Loader2 } from "lucide-react";
+import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Captions, Search, Type, ArrowUp, Loader2, RotateCcw, RotateCw } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Toaster } from "../components/ui/sonner";
 import { toast } from "sonner";
@@ -78,6 +78,7 @@ export default function VideoPlayer() {
     const [showLangPopover, setShowLangPopover] = useState(false);
     const [showPlayFeedback, setShowPlayFeedback] = useState<'play' | 'pause' | null>(null);
     const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
+    const [bufferedRanges, setBufferedRanges] = useState<{ start: number; end: number }[]>([]);
 
     // Client-Side Rendering State
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
@@ -130,6 +131,32 @@ export default function VideoPlayer() {
         };
         fetchData();
     }, [infoHash, fileIndex]);
+
+    // Poll for buffer progress
+    useEffect(() => {
+        if (!infoHash || duration <= 0) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/stats/${infoHash}`);
+                const data = await res.json();
+                const file = data.files && data.files[Number(fileIndex)];
+
+                if (file && file.bufferedRanges) {
+                    // Convert byte ranges to time ranges
+                    const ranges = file.bufferedRanges.map((r: any) => ({
+                        start: (r.start / file.length) * duration,
+                        end: (r.end / file.length) * duration
+                    }));
+                    setBufferedRanges(ranges);
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        }, 1000); // Poll every 1s for responsive feedback
+
+        return () => clearInterval(interval);
+    }, [infoHash, fileIndex, duration]);
 
     const togglePlay = useCallback(() => {
         if (!videoRef.current) return;
@@ -418,11 +445,26 @@ export default function VideoPlayer() {
             )}>
 
                 {/* Progress Slider */}
-                <div className="flex items-center gap-4 group/slider relative pointer-events-auto">
+                <div 
+                    className="flex items-center gap-4 group/slider relative pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                >
                     <span className="text-white/90 text-xs font-mono w-16 text-right">{formatTime(currentTime)}</span>
                     <div className="relative flex-1 h-1.5 bg-white/20 rounded-full cursor-pointer group-hover/slider:h-2.5 transition-all duration-200">
+                        {/* Buffered Ranges */}
+                        {bufferedRanges.map((range, idx) => (
+                            <div
+                                key={idx}
+                                className="absolute top-0 h-full bg-white/40 rounded-full transition-all duration-300"
+                                style={{
+                                    left: `${(range.start / (duration || 1)) * 100}%`,
+                                    width: `${Math.max(0, ((range.end - range.start) / (duration || 1)) * 100)}%`
+                                }}
+                            />
+                        ))}
+
                         <div
-                            className="absolute h-full bg-purple-600 rounded-full shadow-[0_0_10px_rgba(147,51,234,0.5)]"
+                            className="absolute h-full bg-purple-600 rounded-full shadow-[0_0_10px_rgba(147,51,234,0.5)] z-10"
                             style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                         />
                         <div
@@ -483,7 +525,7 @@ export default function VideoPlayer() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <Popover>
+                        <Popover modal={true}>
                             <PopoverTrigger asChild>
                                 <button
                                     className={cn("transition-transform hover:scale-110", subtitleCues.length > 0 ? "text-purple-400" : "text-white/70 hover:text-white")}
