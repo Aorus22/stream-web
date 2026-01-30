@@ -1,14 +1,17 @@
 import { Link, useLocation } from "react-router-dom";
-import { 
-    Compass, 
-    Film, 
-    Search, 
-    Download
+import {
+    Compass,
+    Film,
+    Search,
+    Download,
+    LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { useServer } from "@/contexts/ServerContext";
+import { useNavigate } from "react-router-dom";
 
 type NavItem = {
     icon: React.ElementType;
@@ -24,6 +27,13 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
     const location = useLocation();
+    const { setServerUrl } = useServer();
+    const navigate = useNavigate();
+
+    const handleDisconnect = () => {
+        setServerUrl(null);
+        navigate("/login");
+    };
 
     return (
         <TooltipProvider delayDuration={0}>
@@ -70,8 +80,23 @@ export function Sidebar() {
                     })}
                 </nav>
 
-                {/* Bottom - Theme Switcher */}
+                {/* Bottom - Disconnect & Theme Switcher */}
                 <div className="flex flex-col items-center gap-2 py-4 border-t">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={handleDisconnect}
+                            >
+                                <LogOut className="size-5" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={10}>
+                            Disconnect
+                        </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <div>
@@ -89,12 +114,36 @@ export function Sidebar() {
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+    const { serverUrl, isConnected } = useServer();
+    const location = useLocation();
+
+    const getDisplayUrl = () => {
+        if (!serverUrl) return null;
+        try {
+            const url = new URL(serverUrl);
+            return `${url.hostname}${url.port ? ':' + url.port : ''}`;
+        } catch {
+            return serverUrl;
+        }
+    };
+
     return (
         <div className="min-h-screen bg-background">
             <Sidebar />
             <main className="pl-16">
                 {children}
             </main>
+            {serverUrl && location.pathname !== '/watch' && (
+                <div className="fixed bottom-2 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-muted/50 backdrop-blur-sm rounded-full border">
+                    <div className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        isConnected ? "bg-green-500" : "bg-red-500"
+                    )} />
+                    <span className="text-xs text-muted-foreground">
+                        {getDisplayUrl()}
+                    </span>
+                </div>
+            )}
         </div>
     );
 }

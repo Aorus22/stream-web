@@ -12,8 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { useServer } from "@/contexts/ServerContext";
 
 type SearchResult = {
   name: string;
@@ -33,6 +32,7 @@ type SearchResult = {
 };
 
 export function Search() {
+    const { serverUrl } = useServer();
     const [searchParams] = useSearchParams();
     const [providers, setProviders] = useState<string[]>([]);
     const [selectedProvider, setSelectedProvider] = useState("");
@@ -45,12 +45,14 @@ export function Search() {
 
     // Load state from localStorage on mount
     useEffect(() => {
+        if (!serverUrl) return;
+
         const urlQuery = searchParams.get('q');
         const savedProvider = localStorage.getItem('selectedProvider');
         const savedQuery = localStorage.getItem('searchQuery');
         const savedResults = localStorage.getItem('searchResults');
 
-        fetch(`${API_BASE}/api/providers`)
+        fetch(`${serverUrl}/api/providers`)
             .then(res => res.json())
             .then(data => {
                 setProviders(data || []);
@@ -73,7 +75,7 @@ export function Search() {
                 console.error("Failed to parse saved results", e);
             }
         }
-    }, [searchParams]);
+    }, [searchParams, serverUrl]);
 
     // Save provider to localStorage whenever it changes
     useEffect(() => {
@@ -101,12 +103,12 @@ export function Search() {
     }, [query, selectedProvider, initialSearchDone, searchParams]);
 
     const performSearch = async () => {
-        if (!query || !selectedProvider) return;
+        if (!query || !selectedProvider || !serverUrl) return;
 
         setLoading(true);
         setResults([]);
         try {
-            const res = await fetch(`${API_BASE}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(query)}`);
+            const res = await fetch(`${serverUrl}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(query)}`);
             const data = await res.json();
             
             if (Array.isArray(data)) {
@@ -129,9 +131,10 @@ export function Search() {
     };
 
     const addTorrent = async (magnet: string) => {
+        if (!serverUrl) return;
         setAdding(magnet);
         try {
-            await fetch(`${API_BASE}/api/add`, {
+            await fetch(`${serverUrl}/api/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: `magnet=${encodeURIComponent(magnet)}`

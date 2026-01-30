@@ -34,8 +34,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { useServer } from "@/contexts/ServerContext";
 
 type TrailerInfo = {
     source: string;
@@ -97,10 +96,11 @@ function formatDate(dateStr: string): string {
 }
 
 export function MediaDetail() {
+    const { serverUrl } = useServer();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     // Get type from URL path (e.g., /movie/tt123 -> "movie", /series/tt123 -> "series")
     const type = location.pathname.split('/')[1]; // "movie", "series", or "tv"
 
@@ -125,7 +125,8 @@ export function MediaDetail() {
 
     // Fetch providers on mount
     useEffect(() => {
-        fetch(`${API_BASE}/api/providers`)
+        if (!serverUrl) return;
+        fetch(`${serverUrl}/api/providers`)
             .then(res => res.json())
             .then(data => {
                 setProviders(data || []);
@@ -135,21 +136,22 @@ export function MediaDetail() {
                 }
             })
             .catch(console.error);
-    }, []);
+    }, [serverUrl]);
 
     // Fetch media detail
     useEffect(() => {
         const fetchDetail = async () => {
+            if (!serverUrl) return;
             setLoading(true);
             setError("");
-            
+
             // Determine endpoint based on type
             const mediaType = type === "series" || type === "tv" ? "series" : "movie";
-            
-            console.log("Fetching:", `${API_BASE}/api/catalog/${mediaType}/${id}`);
-            
+
+            console.log("Fetching:", `${serverUrl}/api/catalog/${mediaType}/${id}`);
+
             try {
-                const res = await fetch(`${API_BASE}/api/catalog/${mediaType}/${id}`);
+                const res = await fetch(`${serverUrl}/api/catalog/${mediaType}/${id}`);
                 if (!res.ok) throw new Error(`Failed to fetch details: ${res.status}`);
                 const data: MediaInfo = await res.json();
                 console.log("Received data:", data);
@@ -165,7 +167,7 @@ export function MediaDetail() {
         if (id) {
             fetchDetail();
         }
-    }, [type, id]);
+    }, [type, id, serverUrl]);
 
     // Get unique seasons from episodes
     const seasons = useMemo(() => {
@@ -195,12 +197,12 @@ export function MediaDetail() {
 
     // Search torrents for this media
     const searchTorrents = async (query?: string, episode?: EpisodeInfo) => {
-        if (!detail || !selectedProvider) return;
-        
-        const searchQuery = query || (detail.mediaType === "series" 
-            ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}` 
+        if (!detail || !selectedProvider || !serverUrl) return;
+
+        const searchQuery = query || (detail.mediaType === "series"
+            ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}`
             : `${detail.title} ${detail.year || ""}`);
-        
+
         setTorrentQuery(searchQuery);
         setSelectedEpisode(episode || null);
         setShowTorrentPanel(true);
@@ -209,7 +211,7 @@ export function MediaDetail() {
 
         try {
             const res = await fetch(
-                `${API_BASE}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(searchQuery.trim())}`
+                `${serverUrl}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(searchQuery.trim())}`
             );
             const data = await res.json();
             // Ensure data is an array
@@ -224,9 +226,10 @@ export function MediaDetail() {
 
     // Add torrent to client
     const addTorrent = async (magnet: string) => {
+        if (!serverUrl) return;
         setAddingTorrent(magnet);
         try {
-            const res = await fetch(`${API_BASE}/api/add`, {
+            const res = await fetch(`${serverUrl}/api/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: `magnet=${encodeURIComponent(magnet)}`

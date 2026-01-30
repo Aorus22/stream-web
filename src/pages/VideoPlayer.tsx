@@ -5,6 +5,7 @@ import { cn } from "../lib/utils";
 import { Toaster } from "../components/ui/sonner";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { useServer } from "../contexts/ServerContext";
 
 // Helper to format seconds to HH:MM:SS
 const formatTime = (seconds: number) => {
@@ -15,7 +16,7 @@ const formatTime = (seconds: number) => {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+
 
 type FileInfo = {
     name: string;
@@ -46,6 +47,7 @@ type EmbeddedSubtitle = {
 };
 
 export default function VideoPlayer() {
+    const { serverUrl } = useServer();
     const [searchParams] = useSearchParams();
     const infoHash = searchParams.get('infoHash') || '';
     const fileIndex = parseInt(searchParams.get('fileIndex') || searchParams.get('file') || '0');
@@ -120,8 +122,9 @@ export default function VideoPlayer() {
     // 1. Load Metadata
     useEffect(() => {
         const fetchData = async () => {
+            if (!serverUrl) return;
             try {
-                const statsRes = await fetch(`${API_BASE}/api/stats/${infoHash}`);
+                const statsRes = await fetch(`${serverUrl}/api/stats/${infoHash}`);
                 const statsData = await statsRes.json();
                 const file = statsData.files[Number(fileIndex)];
                 setFileInfo(file);
@@ -132,7 +135,7 @@ export default function VideoPlayer() {
                 const ext = file.name.split('.').pop()?.toLowerCase();
                 setIsTranscoding(!['mp4', 'webm'].includes(ext || ''));
 
-                const metaRes = await fetch(`${API_BASE}/api/metadata/${infoHash}/${fileIndex}`);
+                const metaRes = await fetch(`${serverUrl}/api/metadata/${infoHash}/${fileIndex}`);
                 const metaData = await metaRes.json();
                 if (metaData.duration > 0) setDuration(metaData.duration);
                 if (metaData.subtitles) setEmbeddedSubs(metaData.subtitles);
@@ -141,15 +144,15 @@ export default function VideoPlayer() {
             }
         };
         fetchData();
-    }, [infoHash, fileIndex]);
+    }, [infoHash, fileIndex, serverUrl]);
 
     // Poll for buffer progress
     useEffect(() => {
-        if (!infoHash || duration <= 0) return;
+        if (!infoHash || duration <= 0 || !serverUrl) return;
 
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`${API_BASE}/api/stats/${infoHash}`);
+                const res = await fetch(`${serverUrl}/api/stats/${infoHash}`);
                 const data = await res.json();
                 const file = data.files && data.files[Number(fileIndex)];
 
@@ -167,7 +170,7 @@ export default function VideoPlayer() {
         }, 1000); // Poll every 1s for responsive feedback
 
         return () => clearInterval(interval);
-    }, [infoHash, fileIndex, duration]);
+    }, [infoHash, fileIndex, duration, serverUrl]);
 
     const togglePlay = useCallback(() => {
         if (!videoRef.current) return;
@@ -188,15 +191,15 @@ export default function VideoPlayer() {
         let targetTime = Math.max(0, Math.min(time, duration));
         setCurrentTime(targetTime);
 
-        if (isTranscoding && videoRef.current) {
+        if (isTranscoding && videoRef.current && serverUrl) {
             setSeekOffset(targetTime);
-            videoRef.current.src = `${API_BASE}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
+            videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
             videoRef.current.play();
             setPlaying(true);
         } else if (videoRef.current) {
             videoRef.current.currentTime = targetTime;
         }
-    }, [duration, isTranscoding, infoHash, fileIndex]);
+    }, [duration, isTranscoding, infoHash, fileIndex, serverUrl]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -291,10 +294,10 @@ export default function VideoPlayer() {
 
     // --- Subtitle Actions ---
     const searchSubtitles = async () => {
-        if (!subQuery) return;
+        if (!subQuery || !serverUrl) return;
         setSearchingSubs(true);
         try {
-            const res = await fetch(`${API_BASE}/api/subtitles/search?query=${encodeURIComponent(subQuery)}&lang=${subLang}`);
+            const res = await fetch(`${serverUrl}/api/subtitles/search?query=${encodeURIComponent(subQuery)}&lang=${subLang}`);
             const data = await res.json();
             setSubtitles(data || []);
         } catch (e) {
@@ -306,12 +309,13 @@ export default function VideoPlayer() {
     };
 
     const selectSubtitle = async (link: string, id: string) => {
+        if (!serverUrl) return;
         setSelectedSubId(id);
         setCurrentSubLink(link);
         setSubOffset(0); // Reset offset
         try {
             // Fetch JSON Cues from Backend
-            const res = await fetch(`${API_BASE}/api/subtitles/download?link=${encodeURIComponent(link)}`);
+            const res = await fetch(`${serverUrl}/api/subtitles/download?link=${encodeURIComponent(link)}`);
             const data = await res.json();
             if (Array.isArray(data)) {
                 setSubtitleCues(data);
@@ -329,13 +333,14 @@ export default function VideoPlayer() {
     };
 
     const selectEmbeddedSubtitle = async (streamIndex: number) => {
+        if (!serverUrl) return;
         setIsLoadingSubtitle(true);
         setSelectedSubId(`embedded-${streamIndex}`);
         setCurrentSubLink(null); // No link for embedded
         setSubOffset(0);
 
         try {
-            const res = await fetch(`${API_BASE}/api/stream/${infoHash}/${fileIndex}/sub/${streamIndex}`);
+            const res = await fetch(`${serverUrl}/api/stream/${infoHash}/${fileIndex}/sub/${streamIndex}`);
             const data = await res.json();
             if (Array.isArray(data)) {
                 setSubtitleCues(data);
@@ -354,10 +359,10 @@ export default function VideoPlayer() {
 
 
     const handleAutoSync = async () => {
-        if (!currentSubLink || !infoHash) return;
+        if (!currentSubLink || !infoHash || !serverUrl) return;
         setIsAutoSyncing(true);
         try {
-            const res = await fetch(`${API_BASE}/api/subtitles/autosync?link=${encodeURIComponent(currentSubLink)}&infoHash=${infoHash}&fileIndex=${fileIndex}&currentTime=${currentTime}`);
+            const res = await fetch(`${serverUrl}/api/subtitles/autosync?link=${encodeURIComponent(currentSubLink)}&infoHash=${infoHash}&fileIndex=${fileIndex}&currentTime=${currentTime}`);
             const data = await res.json();
             if (data && typeof data.offset === 'number') {
                 setSubOffset(data.offset);
@@ -394,7 +399,7 @@ export default function VideoPlayer() {
             <video
                 ref={videoRef}
                 className="w-full h-full object-contain"
-                src={`${API_BASE}/stream/${infoHash}/${fileIndex}`}
+                src={serverUrl ? `${serverUrl}/stream/${infoHash}/${fileIndex}` : ''}
                 autoPlay
                 crossOrigin="anonymous"
                 onPlay={() => { setPlaying(true); setLoading(false); }}

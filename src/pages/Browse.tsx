@@ -10,8 +10,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { useServer } from "@/contexts/ServerContext";
 
 // Available genres from Cinemeta
 const GENRES = [
@@ -175,6 +174,7 @@ function MediaGrid({ items, loading }: { items: MediaItem[]; loading: boolean })
 }
 
 export function Browse() {
+    const { serverUrl } = useServer();
     const [activeTab, setActiveTab] = useState<"movies" | "series">("movies");
     const [category, setCategory] = useState<Category>("popular");
     const [selectedGenre, setSelectedGenre] = useState<string>("Animation");
@@ -198,12 +198,13 @@ export function Browse() {
 
     // Fetch initial data for home view
     useEffect(() => {
+        if (!serverUrl) return;
         const fetchMovies = async () => {
             setLoadingMovies(true);
             try {
                 const [popular, topRated] = await Promise.all([
-                    fetch(`${API_BASE}/api/catalog/movies`).then(r => r.json()),
-                    fetch(`${API_BASE}/api/catalog/movies/top-rated`).then(r => r.json()),
+                    fetch(`${serverUrl}/api/catalog/movies`).then(r => r.json()),
+                    fetch(`${serverUrl}/api/catalog/movies/top-rated`).then(r => r.json()),
                 ]);
                 setPopularMovies(popular.results || []);
                 setTopRatedMovies(topRated.results || []);
@@ -218,8 +219,8 @@ export function Browse() {
             setLoadingSeries(true);
             try {
                 const [popular, topRated] = await Promise.all([
-                    fetch(`${API_BASE}/api/catalog/series`).then(r => r.json()),
-                    fetch(`${API_BASE}/api/catalog/series/top-rated`).then(r => r.json()),
+                    fetch(`${serverUrl}/api/catalog/series`).then(r => r.json()),
+                    fetch(`${serverUrl}/api/catalog/series/top-rated`).then(r => r.json()),
                 ]);
                 setPopularSeries(popular.results || []);
                 setTopRatedSeries(topRated.results || []);
@@ -232,24 +233,25 @@ export function Browse() {
 
         fetchMovies();
         fetchSeries();
-    }, []);
+    }, [serverUrl]);
 
     // Fetch category items when category changes
     useEffect(() => {
         const fetchCategory = async () => {
+            if (!serverUrl) return;
             setCategoryLoading(true);
             const mediaType = activeTab;
-            
+
             let url: string;
             if (category === "genre") {
                 // Use selected genre
-                url = `${API_BASE}/api/catalog/${mediaType}/genre/${selectedGenre}?skip=${categorySkip}`;
+                url = `${serverUrl}/api/catalog/${mediaType}/genre/${selectedGenre}?skip=${categorySkip}`;
             } else if (category === "top-rated") {
-                url = `${API_BASE}/api/catalog/${mediaType}/top-rated?skip=${categorySkip}`;
+                url = `${serverUrl}/api/catalog/${mediaType}/top-rated?skip=${categorySkip}`;
             } else {
-                url = `${API_BASE}/api/catalog/${mediaType}?skip=${categorySkip}`;
+                url = `${serverUrl}/api/catalog/${mediaType}?skip=${categorySkip}`;
             }
-                
+
             try {
                 const res = await fetch(url);
                 const data: CatalogResponse = await res.json();
@@ -263,18 +265,18 @@ export function Browse() {
         };
 
         fetchCategory();
-    }, [category, activeTab, categorySkip, selectedGenre]);
+    }, [category, activeTab, categorySkip, selectedGenre, serverUrl]);
 
     // Re-run search when activeTab changes
     useEffect(() => {
-        if (hasSearched && searchQuery) {
+        if (hasSearched && searchQuery && serverUrl) {
             const performSearch = async () => {
                 setIsSearching(true);
                 setSearchResults([]);
                 try {
                     const mediaType = activeTab;
                     const res = await fetch(
-                        `${API_BASE}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
+                        `${serverUrl}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
                     );
                     const data: CatalogResponse = await res.json();
                     setSearchResults(data.results || []);
@@ -286,21 +288,21 @@ export function Browse() {
             };
             performSearch();
         }
-    }, [activeTab]);
+    }, [activeTab, serverUrl, hasSearched, searchQuery]);
 
     // Search handler
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!searchQuery.trim()) return;
+        if (!searchQuery.trim() || !serverUrl) return;
 
         setIsSearching(true);
         setHasSearched(true);
         setSearchResults([]);
         try {
             const mediaType = activeTab;
-            console.log("Searching:", `${API_BASE}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`);
+            console.log("Searching:", `${serverUrl}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`);
             const res = await fetch(
-                `${API_BASE}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
+                `${serverUrl}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
             );
             const data: CatalogResponse = await res.json();
             console.log("Search results:", data);

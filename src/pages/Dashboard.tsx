@@ -19,8 +19,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { useServer } from "@/contexts/ServerContext";
 
 type TorrentFile = {
     name: string;
@@ -65,6 +64,7 @@ const formatBytes = (bytes: number) => {
 };
 
 export function Dashboard() {
+    const { serverUrl } = useServer();
     const [torrents, setTorrents] = useState<Torrent[]>([]);
     const [cachedFiles, setCachedFiles] = useState<CachedFile[]>([]);
     const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
@@ -75,9 +75,10 @@ export function Dashboard() {
     const [error, setError] = useState("");
 
     const fetchTorrents = async () => {
+        if (!serverUrl) return;
         setRefreshing(true);
         try {
-            const res = await fetch(`${API_BASE}/api/torrents`);
+            const res = await fetch(`${serverUrl}/api/torrents`);
             const data = await res.json();
             setTorrents(data || []);
         } catch (err) {
@@ -88,11 +89,12 @@ export function Dashboard() {
     };
 
     const fetchCachedFiles = async () => {
+        if (!serverUrl) return;
         setRefreshingCache(true);
         try {
             const [filesRes, statsRes] = await Promise.all([
-                fetch(`${API_BASE}/api/cache`),
-                fetch(`${API_BASE}/api/cache/stats`)
+                fetch(`${serverUrl}/api/cache`),
+                fetch(`${serverUrl}/api/cache/stats`)
             ]);
             const files = await filesRes.json();
             const stats = await statsRes.json();
@@ -112,12 +114,12 @@ export function Dashboard() {
 
     const addMagnet = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!magnet) return;
+        if (!magnet || !serverUrl) return;
         setLoading(true);
         setError("");
 
         try {
-            const res = await fetch(`${API_BASE}/api/add`, {
+            const res = await fetch(`${serverUrl}/api/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: `magnet=${encodeURIComponent(magnet)}`
@@ -135,7 +137,8 @@ export function Dashboard() {
     };
 
     const removeTorrent = async (hash: string) => {
-        await fetch(`${API_BASE}/api/remove/${hash}`, { method: "DELETE" });
+        if (!serverUrl) return;
+        await fetch(`${serverUrl}/api/remove/${hash}`, { method: "DELETE" });
         fetchTorrents();
     };
 
@@ -144,16 +147,18 @@ export function Dashboard() {
     };
 
     const killStream = async () => {
+        if (!serverUrl) return;
         try {
-            await fetch(`${API_BASE}/api/stream/active`, { method: "DELETE" });
+            await fetch(`${serverUrl}/api/stream/active`, { method: "DELETE" });
         } catch (err) {
             console.error("Failed to kill stream", err);
         }
     };
 
     const deleteCachedFolder = async (infoHash: string) => {
+        if (!serverUrl) return;
         try {
-            await fetch(`${API_BASE}/api/cache/${infoHash}`, { method: "DELETE" });
+            await fetch(`${serverUrl}/api/cache/${infoHash}`, { method: "DELETE" });
             fetchCachedFiles();
         } catch (err) {
             console.error("Failed to delete cache:", err);
@@ -161,8 +166,9 @@ export function Dashboard() {
     };
 
     const removeAllTorrents = async () => {
+        if (!serverUrl) return;
         try {
-            await fetch(`${API_BASE}/api/torrents/all`, { method: "DELETE" });
+            await fetch(`${serverUrl}/api/torrents/all`, { method: "DELETE" });
             fetchTorrents();
         } catch (err) {
             console.error("Failed to remove all torrents:", err);
@@ -170,8 +176,9 @@ export function Dashboard() {
     };
 
     const removeAllCache = async () => {
+        if (!serverUrl) return;
         try {
-            await fetch(`${API_BASE}/api/cache/all`, { method: "DELETE" });
+            await fetch(`${serverUrl}/api/cache/all`, { method: "DELETE" });
             fetchCachedFiles();
         } catch (err) {
             console.error("Failed to remove all cache:", err);
@@ -402,7 +409,7 @@ export function Dashboard() {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon-sm"
-                                                                        onClick={() => copyToClipboard(`${API_BASE}/stream/${t.infoHash}/${i}`)}
+                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${t.infoHash}/${i}`)}
                                                                     >
                                                                         <Copy className="size-4" />
                                                                     </Button>
@@ -414,7 +421,7 @@ export function Dashboard() {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon-sm"
-                                                                        onClick={() => window.open(`${API_BASE}/stream/${t.infoHash}/${i}`, '_blank')}
+                                                                        onClick={() => window.open(`${serverUrl}/stream/${t.infoHash}/${i}`, '_blank')}
                                                                     >
                                                                         <ExternalLink className="size-4" />
                                                                     </Button>
@@ -557,7 +564,7 @@ export function Dashboard() {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon-sm"
-                                                                        onClick={() => copyToClipboard(`${API_BASE}/stream/${infoHash}/${file.fileIndex}`)}
+                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex}`)}
                                                                     >
                                                                         <Copy className="size-4" />
                                                                     </Button>
