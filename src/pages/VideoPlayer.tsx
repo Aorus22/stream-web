@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import Hls from "hls.js";
 import { useSearchParams } from "react-router-dom";
 import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Captions, Search, Type, ArrowUp, Loader2, RotateCcw, RotateCw } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -54,6 +55,7 @@ export default function VideoPlayer() {
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const hlsRef = useRef<Hls | null>(null);
 
     const [playing, setPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -146,14 +148,15 @@ export default function VideoPlayer() {
         fetchData();
     }, [infoHash, fileIndex, serverUrl]);
 
-    // Poll for buffer progress
+    // SSE for stats
     useEffect(() => {
-        if (!infoHash || duration <= 0 || !serverUrl) return;
+        if (!infoHash || !serverUrl) return;
 
-        const interval = setInterval(async () => {
+        const eventSource = new EventSource(`${serverUrl}/api/stats/${infoHash}/stream`);
+
+        eventSource.onmessage = (event) => {
             try {
-                const res = await fetch(`${serverUrl}/api/stats/${infoHash}`);
-                const data = await res.json();
+                const data = JSON.parse(event.data);
                 const file = data.files && data.files[Number(fileIndex)];
 
                 if (file && file.bufferedRanges) {
@@ -165,11 +168,18 @@ export default function VideoPlayer() {
                     setBufferedRanges(ranges);
                 }
             } catch (e) {
-                // Silent fail
+                console.error("SSE Parse Error", e);
             }
-        }, 1000); // Poll every 1s for responsive feedback
+        };
 
-        return () => clearInterval(interval);
+        eventSource.onerror = (e) => {
+            console.error("SSE Error", e);
+            eventSource.close();
+        };
+
+        return () => {
+            eventSource.close();
+        };
     }, [infoHash, fileIndex, duration, serverUrl]);
 
     const togglePlay = useCallback(() => {
@@ -191,13 +201,22 @@ export default function VideoPlayer() {
         let targetTime = Math.max(0, Math.min(time, duration));
         setCurrentTime(targetTime);
 
-        if (isTranscoding && videoRef.current && serverUrl) {
-            setSeekOffset(targetTime);
-            videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
-            videoRef.current.play();
-            setPlaying(true);
-        } else if (videoRef.current) {
+        if (videoRef.current) {
             videoRef.current.currentTime = targetTime;
+
+            // For direct stream manual seeking (legacy/fallback)
+            // But with HLS, we just set currentTime. 
+            // If we are NOT using HLS but "transcoding" via pseudo-streaming (old way), update src.
+            // However, we are moving towards HLS for transcoding.
+            // So if HLS is active, we don't change src.
+
+            if (isTranscoding && !hlsRef.current && serverUrl) {
+                // Fallback for non-HLS transcoding (if any)
+                setSeekOffset(targetTime);
+                videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
+                videoRef.current.play();
+                setPlaying(true);
+            }
         }
     }, [duration, isTranscoding, infoHash, fileIndex, serverUrl]);
 
@@ -266,6 +285,67 @@ export default function VideoPlayer() {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [currentTime, handleSeek, togglePlay]);
+
+    // Initialize HLS or Direct Stream
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video || !serverUrl) return;
+
+        // Cleanup previous HLS
+        if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+        }
+
+        if (isTranscoding) {
+            const hlsUrl = `${serverUrl}/hls/${infoHash}/${fileIndex}/playlist.m3u8`;
+
+            if (Hls.isSupported()) {
+                const hls = new Hls({
+                    debug: false,
+                    enableWorker: true,
+                    maxBufferLength: 600, // Target: 10 minutes (600s)
+                    maxMaxBufferLength: 1200, // Max: 20 minutes (1200s)
+                    maxBufferSize: 500 * 1000 * 1000, // 500 MB max buffer size
+                    backBufferLength: 60, // Keep 60s of back buffer
+                });
+                hlsRef.current = hls;
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    // video.play().catch(() => {});
+                });
+                hls.on(Hls.Events.ERROR, (_, data) => {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari
+                video.src = hlsUrl;
+            }
+        } else {
+            // Direct Stream (MP4/WebM)
+            video.src = `${serverUrl}/stream/${infoHash}/${fileIndex}`;
+        }
+
+        return () => {
+            if (hlsRef.current) {
+                hlsRef.current.destroy();
+                hlsRef.current = null;
+            }
+        };
+    }, [isTranscoding, serverUrl, infoHash, fileIndex]);
 
     // 2. Time Update & Subtitle Rendering Logic
     useEffect(() => {
@@ -399,7 +479,7 @@ export default function VideoPlayer() {
             <video
                 ref={videoRef}
                 className="w-full h-full object-contain"
-                src={serverUrl ? `${serverUrl}/stream/${infoHash}/${fileIndex}` : ''}
+                // src removed here, handled in useEffect
                 autoPlay
                 crossOrigin="anonymous"
                 onPlay={() => { setPlaying(true); setLoading(false); }}
@@ -413,14 +493,14 @@ export default function VideoPlayer() {
 
             {/* Play/Pause/Seek Feedback */}
             {feedback && (
-                <div 
+                <div
                     key={feedback.id}
                     className={cn(
-                    "absolute inset-0 flex items-center pointer-events-none z-40 px-20",
-                    feedback.position === 'left' ? "justify-start" :
-                    feedback.position === 'right' ? "justify-end" :
-                    "justify-center"
-                )}>
+                        "absolute inset-0 flex items-center pointer-events-none z-40 px-20",
+                        feedback.position === 'left' ? "justify-start" :
+                            feedback.position === 'right' ? "justify-end" :
+                                "justify-center"
+                    )}>
                     <div className="bg-black/50 rounded-full p-5 animate-[ping_0.5s_ease-out_forwards]">
                         {feedback.type === 'play' && <Play size={48} fill="white" className="text-white ml-1" />}
                         {feedback.type === 'pause' && <Pause size={48} fill="white" className="text-white" />}
@@ -497,11 +577,11 @@ export default function VideoPlayer() {
                 "absolute bottom-0 left-0 right-0 px-8 pb-8 pt-20 transition-all duration-300 z-20 flex flex-col gap-2",
                 showControls ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
             )}
-            onClick={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
             >
 
                 {/* Progress Slider */}
-                <div 
+                <div
                     className="flex items-center gap-4 group/slider relative pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
                 >
