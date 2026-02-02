@@ -134,8 +134,8 @@ export default function VideoPlayer() {
                 // Auto fill subtitle query with filename
                 setSubQuery(file.name.replace(/\./g, " "));
 
-                const ext = file.name.split('.').pop()?.toLowerCase();
-                setIsTranscoding(!['mp4', 'webm'].includes(ext || ''));
+                // Always use HLS for all files
+                setIsTranscoding(true);
 
                 const metaRes = await fetch(`${serverUrl}/api/metadata/${infoHash}/${fileIndex}`);
                 const metaData = await metaRes.json();
