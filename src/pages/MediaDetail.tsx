@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
+import { router } from "@/router/route";
 import {
     ArrowLeft,
     Play,
@@ -98,7 +99,7 @@ function formatDate(dateStr: string): string {
 export function MediaDetail() {
     const { serverUrl } = useServer();
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
+
     const location = useLocation();
 
     // Get type from URL path (e.g., /movie/tt123 -> "movie", /series/tt123 -> "series")
@@ -188,7 +189,7 @@ export function MediaDetail() {
         if (!detail?.episodes) return [];
         return detail.episodes
             .filter(ep => ep.season === selectedSeason)
-            .filter(ep => 
+            .filter(ep =>
                 ep.title.toLowerCase().includes(episodeSearch.toLowerCase()) ||
                 ep.overview?.toLowerCase().includes(episodeSearch.toLowerCase())
             )
@@ -236,7 +237,7 @@ export function MediaDetail() {
             });
             if (!res.ok) throw new Error("Failed to add torrent");
             // Navigate to dashboard to see the torrent
-            navigate("/dashboard");
+            router.navigate('/dashboard');
         } catch (err) {
             console.error("Failed to add torrent:", err);
         } finally {
@@ -275,7 +276,7 @@ export function MediaDetail() {
             <div className="min-h-screen bg-background flex items-center justify-center">
                 <div className="text-center space-y-4">
                     <p className="text-destructive">{error || "Not found"}</p>
-                    <Button onClick={() => navigate(-1)}>Go Back</Button>
+                    <Button onClick={() => router.navigate(-1)}>Go Back</Button>
                 </div>
             </div>
         );
@@ -309,7 +310,7 @@ export function MediaDetail() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => navigate(-1)}
+                            onClick={() => router.navigate(-1)}
                             className="bg-background/20 backdrop-blur-sm hover:bg-background/40"
                         >
                             <ArrowLeft className="size-5" />
@@ -340,8 +341,8 @@ export function MediaDetail() {
                         <div className="flex-1 space-y-6">
                             {/* Logo or Title */}
                             {detail.logo ? (
-                                <img 
-                                    src={detail.logo} 
+                                <img
+                                    src={detail.logo}
                                     alt={detail.title}
                                     className="max-w-md max-h-32 object-contain"
                                 />
@@ -604,11 +605,11 @@ export function MediaDetail() {
             {showTorrentPanel && (
                 <div className="fixed inset-0 z-50 flex justify-end">
                     {/* Backdrop */}
-                    <div 
+                    <div
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                         onClick={() => setShowTorrentPanel(false)}
                     />
-                    
+
                     {/* Panel */}
                     <div className="relative w-full max-w-md bg-background/95 backdrop-blur-md border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300">
                         {/* Header */}
@@ -624,7 +625,7 @@ export function MediaDetail() {
                                 </Button>
                                 <div className="min-w-0">
                                     <h3 className="font-semibold truncate">
-                                        {selectedEpisode 
+                                        {selectedEpisode
                                             ? `S${selectedEpisode.season}E${selectedEpisode.episode} ${selectedEpisode.title}`
                                             : detail.title
                                         }
