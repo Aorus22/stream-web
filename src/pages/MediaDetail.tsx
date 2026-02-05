@@ -131,10 +131,7 @@ export function MediaDetail() {
             .then(res => res.json())
             .then(data => {
                 setProviders(data || []);
-                if (data && data.length > 0) {
-                    const saved = localStorage.getItem('selectedProvider');
-                    setSelectedProvider(saved && data.includes(saved) ? saved : data[0]);
-                }
+                // Don't auto-select, let user choose first
             })
             .catch(console.error);
     }, [serverUrl]);
@@ -198,7 +195,7 @@ export function MediaDetail() {
 
     // Search torrents for this media
     const searchTorrents = async (query?: string, episode?: EpisodeInfo) => {
-        if (!detail || !selectedProvider || !serverUrl) return;
+        if (!detail || !serverUrl) return;
 
         const searchQuery = query || (detail.mediaType === "series"
             ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}`
@@ -207,6 +204,14 @@ export function MediaDetail() {
         setTorrentQuery(searchQuery);
         setSelectedEpisode(episode || null);
         setShowTorrentPanel(true);
+
+        // Don't search if no provider selected
+        if (!selectedProvider) {
+            setSearchingTorrents(false);
+            setTorrentResults([]);
+            return;
+        }
+
         setSearchingTorrents(true);
         setTorrentResults([]);
 
@@ -458,7 +463,7 @@ export function MediaDetail() {
                                 )}
                                 <Button
                                     onClick={() => searchTorrents()}
-                                    disabled={searchingTorrents || !selectedProvider}
+                                    disabled={searchingTorrents}
                                     className="gap-2 bg-primary hover:bg-primary/90"
                                 >
                                     {searchingTorrents ? (
@@ -633,12 +638,12 @@ export function MediaDetail() {
                                     <p className="text-xs text-muted-foreground truncate">{torrentQuery}</p>
                                 </div>
                             </div>
-                            <Select value={selectedProvider} onValueChange={(v) => {
+                            <Select value={selectedProvider || ""} onValueChange={(v) => {
                                 setSelectedProvider(v);
                                 localStorage.setItem('selectedProvider', v);
                             }}>
                                 <SelectTrigger className="w-[120px]">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Choose" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {providers.map(p => (
@@ -673,7 +678,13 @@ export function MediaDetail() {
                         {/* Results */}
                         <div className="flex-1 overflow-y-auto h-[calc(100vh-180px)] w-full">
                             <div className="flex flex-col gap-3 p-4 w-full">
-                                {searchingTorrents ? (
+                                {!selectedProvider ? (
+                                    <div className="text-center py-12 text-muted-foreground">
+                                        <Search className="size-12 mx-auto mb-4 opacity-20" />
+                                        <p>Select a provider first</p>
+                                        <p className="text-xs mt-1">Choose a torrent provider from the dropdown above</p>
+                                    </div>
+                                ) : searchingTorrents ? (
                                     <div className="flex flex-col items-center justify-center py-12 gap-3">
                                         <Loader2 className="size-8 animate-spin text-primary" />
                                         <p className="text-sm text-muted-foreground">Searching torrents...</p>
