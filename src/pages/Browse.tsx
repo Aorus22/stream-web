@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Search as SearchIcon, Film, Tv, TrendingUp, Star, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Search as SearchIcon, Film, Tv, TrendingUp, Star, ChevronLeft, ChevronRight, Filter, Waves } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { useServer } from "@/contexts/ServerContext";
 // Available genres from Cinemeta
 const GENRES = [
     "Action",
-    "Adventure", 
+    "Adventure",
     "Animation",
     "Biography",
     "Comedy",
@@ -61,52 +61,53 @@ function MediaCard({ item }: { item: MediaItem }) {
     const detailPath = item.mediaType === "series" ? `/series/${item.id}` : `/movie/${item.id}`;
 
     return (
-        <Link to={detailPath}>
-            <Card className="group relative overflow-hidden border-0 bg-transparent cursor-pointer transition-transform hover:scale-105">
-                <div className="aspect-[2/3] relative rounded-lg overflow-hidden bg-muted">
+        <Link to={detailPath} className="group">
+            <Card className="overflow-hidden border-0 bg-transparent hover:shadow-xl hover:shadow-primary/10 transition-all duration-300">
+                <div className="aspect-[2/3] relative rounded-xl overflow-hidden bg-muted/50">
                     {item.poster ? (
                         <img
                             src={item.poster}
                             alt={item.title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            <Film className="size-12 text-muted-foreground" />
+                            <Film className="size-12 text-muted-foreground/50" />
                         </div>
                     )}
-                    {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                        <div className="flex items-center gap-2 text-white/90 text-xs mb-1">
-                            {item.rating && (
-                                <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs px-1.5 py-0">
-                                    <Star className="size-3 mr-0.5 fill-yellow-400" />
-                                    {item.rating}
-                                </Badge>
-                            )}
-                            {item.year && <span>{item.year}</span>}
+                    {/* Rating Badge */}
+                    {item.rating && (
+                        <div className="absolute top-2 left-2">
+                            <Badge className="bg-black/60 backdrop-blur-sm text-yellow-400 border-yellow-500/30 text-xs px-2 py-0.5 font-medium">
+                                <Star className="size-3 mr-0.5 fill-yellow-400" />
+                                {item.rating}
+                            </Badge>
                         </div>
-                        <h3 className="text-white font-medium text-sm line-clamp-2">{item.title}</h3>
-                    </div>
+                    )}
                     {/* Media Type Badge */}
                     <div className="absolute top-2 right-2">
                         <Badge
                             variant="secondary"
                             className={cn(
-                                "text-xs px-1.5 py-0.5",
+                                "text-xs px-2 py-0.5 font-medium backdrop-blur-sm",
                                 item.mediaType === "series"
-                                    ? "bg-blue-500/80 text-white"
-                                    : "bg-purple-500/80 text-white"
+                                    ? "bg-accent/80 text-white"
+                                    : "bg-primary/80 text-white"
                             )}
                         >
                             {item.mediaType === "series" ? "TV" : "Film"}
                         </Badge>
                     </div>
-                </div>
-                <div className="mt-2 space-y-0.5 group-hover:opacity-0 transition-opacity">
-                    <h3 className="font-medium text-sm truncate">{item.title}</h3>
-                    <p className="text-xs text-muted-foreground">{item.year || item.releaseInfo}</p>
+                    {/* Bottom Gradient Overlay */}
+                    <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+                    {/* Title Overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                        <h3 className="text-white font-medium text-sm line-clamp-2 drop-shadow-lg">{item.title}</h3>
+                        {item.year && (
+                            <p className="text-white/80 text-xs mt-1 drop-shadow-md">{item.year}</p>
+                        )}
+                    </div>
                 </div>
             </Card>
         </Link>
@@ -129,10 +130,10 @@ function MediaRow({ title, items, loading, icon: Icon }: {
                 <div className="flex gap-4 pb-4">
                     {loading ? (
                         Array.from({ length: 8 }).map((_, i) => (
-                            <div key={i} className="w-[150px] flex-shrink-0">
-                                <Skeleton className="aspect-[2/3] rounded-lg" />
-                                <Skeleton className="h-4 w-3/4 mt-2" />
-                                <Skeleton className="h-3 w-1/2 mt-1" />
+                            <div key={i} className="w-[150px] flex-shrink-0 space-y-2">
+                                <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-3 w-1/2" />
                             </div>
                         ))
                     ) : (
@@ -154,12 +155,24 @@ function MediaGrid({ items, loading }: { items: MediaItem[]; loading: boolean })
         return (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {Array.from({ length: 18 }).map((_, i) => (
-                    <div key={i}>
-                        <Skeleton className="aspect-[2/3] rounded-lg" />
-                        <Skeleton className="h-4 w-3/4 mt-2" />
-                        <Skeleton className="h-3 w-1/2 mt-1" />
+                    <div key={i} className="space-y-2">
+                        <Skeleton className="aspect-[2/3] w-full rounded-xl" />
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
                     </div>
                 ))}
+            </div>
+        );
+    }
+
+    if (items.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <Film className="size-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No content found</h3>
+                <p className="text-sm text-muted-foreground">Try selecting a different category</p>
             </div>
         );
     }
@@ -244,7 +257,6 @@ export function Browse() {
 
             let url: string;
             if (category === "genre") {
-                // Use selected genre
                 url = `${serverUrl}/api/catalog/${mediaType}/genre/${selectedGenre}?skip=${categorySkip}`;
             } else if (category === "top-rated") {
                 url = `${serverUrl}/api/catalog/${mediaType}/top-rated?skip=${categorySkip}`;
@@ -300,12 +312,10 @@ export function Browse() {
         setSearchResults([]);
         try {
             const mediaType = activeTab;
-            console.log("Searching:", `${serverUrl}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`);
             const res = await fetch(
                 `${serverUrl}/api/catalog/${mediaType}/search?q=${encodeURIComponent(searchQuery)}`
             );
             const data: CatalogResponse = await res.json();
-            console.log("Search results:", data);
             setSearchResults(data.results || []);
         } catch (err) {
             console.error("Failed to search:", err);
@@ -321,41 +331,43 @@ export function Browse() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+        <div className="min-h-screen">
             {/* Header */}
-            <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b">
-                <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center gap-4">
-                    {/* Search Bar - Centered like Stremio */}
-                    <form onSubmit={handleSearch} className="w-full max-w-xl">
-                        <div className="relative">
-                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                            <Input
-                                type="text"
-                                placeholder="Search movies, TV shows..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-11 pr-10 h-10 bg-muted/50 border-0 rounded-full"
-                            />
-                            {searchQuery && (
-                                <button
-                                    type="button"
-                                    onClick={clearSearch}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                >
-                                    <span className="sr-only">Clear</span>
-                                    <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-                    </form>
+            <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    <div className="flex items-center justify-center gap-4">
+                        {/* Search Bar */}
+                        <form onSubmit={handleSearch} className="w-full max-w-xl">
+                            <div className="relative">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                                <Input
+                                    type="text"
+                                    placeholder="Search movies, TV shows..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10 pr-10 h-10 bg-muted/50 focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={clearSearch}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        <span className="sr-only">Clear</span>
+                                        <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
                 <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as "movies" | "series"); setCategorySkip(0); }}>
-                    <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                         <TabsList className="bg-muted/50">
                             <TabsTrigger value="movies" className="gap-2">
                                 <Film className="size-4" />
@@ -388,33 +400,31 @@ export function Browse() {
                                     <Star className="size-4 fill-current" />
                                     Top Rated
                                 </Button>
-                                
+
                                 {/* Genre Dropdown */}
-                                <div className="flex items-center gap-1">
-                                    <Select 
-                                        value={selectedGenre} 
-                                        onValueChange={(value) => {
-                                            setSelectedGenre(value);
-                                            setCategory("genre");
-                                            setCategorySkip(0);
-                                        }}
-                                    >
-                                        <SelectTrigger className={cn(
-                                            "w-[140px] h-8",
-                                            category === "genre" ? "border-primary" : ""
-                                        )}>
-                                            <Filter className="size-4 mr-1" />
-                                            <SelectValue placeholder="Genre" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {GENRES.map((genre) => (
-                                                <SelectItem key={genre} value={genre}>
-                                                    {genre}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                <Select
+                                    value={selectedGenre}
+                                    onValueChange={(value) => {
+                                        setSelectedGenre(value);
+                                        setCategory("genre");
+                                        setCategorySkip(0);
+                                    }}
+                                >
+                                    <SelectTrigger className={cn(
+                                        "w-[140px] h-9",
+                                        category === "genre" && "ring-2 ring-primary"
+                                    )}>
+                                        <Filter className="size-4 mr-1" />
+                                        <SelectValue placeholder="Genre" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {GENRES.map((genre) => (
+                                            <SelectItem key={genre} value={genre}>
+                                                {genre}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
                     </div>
@@ -422,16 +432,28 @@ export function Browse() {
                     {/* Search Results Header */}
                     {(searchQuery || hasSearched) && (
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold">
-                                {isSearching ? "Searching..." : `Search results for "${searchQuery}"`}
-                            </h2>
+                            <div className="flex items-center gap-2">
+                                {isSearching ? (
+                                    <>
+                                        <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                        <h2 className="text-lg font-semibold">Searching...</h2>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Waves className="size-5 text-primary" />
+                                        <h2 className="text-lg font-semibold">
+                                            {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+                                        </h2>
+                                    </>
+                                )}
+                            </div>
                             <Button variant="ghost" size="sm" onClick={clearSearch}>
                                 Clear
                             </Button>
                         </div>
                     )}
 
-                    <TabsContent value="movies" className="space-y-8">
+                    <TabsContent value="movies" className="space-y-6">
                         {(searchQuery || hasSearched) ? (
                             /* Search Results Grid */
                             isSearching ? (
@@ -439,14 +461,14 @@ export function Browse() {
                             ) : searchResults.length > 0 ? (
                                 <MediaGrid items={searchResults} loading={false} />
                             ) : hasSearched ? (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    <p>No results found for "{searchQuery}" in Movies</p>
+                                <div className="text-center py-20">
+                                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                                        <SearchIcon className="size-10 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                                    <p className="text-sm text-muted-foreground">Try different keywords</p>
                                 </div>
-                            ) : (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    <p>Press Enter to search</p>
-                                </div>
-                            )
+                            ) : null
                         ) : (
                             /* Browse Content */
                             <>
@@ -495,7 +517,7 @@ export function Browse() {
                         )}
                     </TabsContent>
 
-                    <TabsContent value="series" className="space-y-8">
+                    <TabsContent value="series" className="space-y-6">
                         {(searchQuery || hasSearched) ? (
                             /* Search Results Grid */
                             isSearching ? (
@@ -503,14 +525,14 @@ export function Browse() {
                             ) : searchResults.length > 0 ? (
                                 <MediaGrid items={searchResults} loading={false} />
                             ) : hasSearched ? (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    <p>No results found for "{searchQuery}" in TV Series</p>
+                                <div className="text-center py-20">
+                                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                                        <SearchIcon className="size-10 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                                    <p className="text-sm text-muted-foreground">Try different keywords</p>
                                 </div>
-                            ) : (
-                                <div className="text-center py-12 text-muted-foreground">
-                                    <p>Press Enter to search</p>
-                                </div>
-                            )
+                            ) : null
                         ) : (
                             /* Browse Content */
                             <>
