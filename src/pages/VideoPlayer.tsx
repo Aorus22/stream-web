@@ -82,6 +82,8 @@ export default function VideoPlayer() {
     const [feedback, setFeedback] = useState<{ type: 'play' | 'pause' | 'forward' | 'backward', text?: string, position?: 'left' | 'right' | 'center', id: number } | null>(null);
     const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
     const [bufferedRanges, setBufferedRanges] = useState<{ start: number; end: number }[]>([]);
+    const [hoverTime, setHoverTime] = useState<number | null>(null);
+    const [hoverPosition, setHoverPosition] = useState<number>(0);
 
     // Client-Side Rendering State
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
@@ -491,6 +493,16 @@ export default function VideoPlayer() {
         togglePlay();
     }
 
+    const handleSliderHover = (e: React.MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percentage = Math.max(0, Math.min(1, x / rect.width));
+        const time = percentage * duration;
+        
+        setHoverTime(time);
+        setHoverPosition(percentage * 100);
+    };
+
     return (
         <div
             ref={containerRef}
@@ -618,7 +630,12 @@ export default function VideoPlayer() {
                     onClick={(e) => e.stopPropagation()}
                 >
                     <span className="text-white/90 text-xs font-mono w-16 text-right">{formatTime(currentTime)}</span>
-                    <div className="relative flex-1 h-1.5 bg-white/20 rounded-full cursor-pointer group-hover/slider:h-2.5 transition-all duration-200">
+                    <div
+                        className="relative flex-1 h-1.5 bg-white/20 rounded-full cursor-pointer group-hover/slider:h-2.5 transition-all duration-200"
+                        onMouseEnter={handleSliderHover}
+                        onMouseMove={handleSliderHover}
+                        onMouseLeave={() => setHoverTime(null)}
+                    >
                         {/* Buffered Ranges */}
                         {bufferedRanges.map((range, idx) => (
                             <div
@@ -657,6 +674,16 @@ export default function VideoPlayer() {
                             }}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                         />
+                        
+                        {/* Hover Timestamp Tooltip */}
+                        {hoverTime !== null && (
+                            <div
+                                className="absolute bottom-full mb-2 -translate-x-1/2 bg-black/90 text-white text-xs font-mono px-2 py-1 rounded pointer-events-none transition-opacity duration-150"
+                                style={{ left: `${hoverPosition}%` }}
+                            >
+                                {formatTime(hoverTime)}
+                            </div>
+                        )}
                     </div>
 
                     <span className="text-white/90 text-xs font-mono w-16">{formatTime(duration)}</span>
