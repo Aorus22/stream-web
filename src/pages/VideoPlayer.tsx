@@ -82,6 +82,7 @@ export default function VideoPlayer() {
     const [feedback, setFeedback] = useState<{ type: 'play' | 'pause' | 'forward' | 'backward', text?: string, position?: 'left' | 'right' | 'center', id: number } | null>(null);
     const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
     const [bufferedRanges, setBufferedRanges] = useState<{ start: number; end: number }[]>([]);
+    const [hlsBufferedRanges, setHlsBufferedRanges] = useState<{ start: number; end: number }[]>([]);
     const [hoverTime, setHoverTime] = useState<number | null>(null);
     const [hoverPosition, setHoverPosition] = useState<number>(0);
 
@@ -394,10 +395,38 @@ export default function VideoPlayer() {
             } else {
                 setCurrentSubtitleText(null);
             }
+
+            // Capture HLS buffer ranges
+            if (video.buffered.length > 0) {
+                const ranges: { start: number; end: number }[] = [];
+                for (let i = 0; i < video.buffered.length; i++) {
+                    const start = video.buffered.start(i);
+                    const end = video.buffered.end(i);
+                    ranges.push({ start, end });
+                }
+                setHlsBufferedRanges(ranges);
+            }
+        };
+
+        const onProgress = () => {
+            // Update HLS buffer on progress event
+            if (video.buffered.length > 0) {
+                const ranges: { start: number; end: number }[] = [];
+                for (let i = 0; i < video.buffered.length; i++) {
+                    const start = video.buffered.start(i);
+                    const end = video.buffered.end(i);
+                    ranges.push({ start, end });
+                }
+                setHlsBufferedRanges(ranges);
+            }
         };
 
         video.addEventListener('timeupdate', onTimeUpdate);
-        return () => video.removeEventListener('timeupdate', onTimeUpdate);
+        video.addEventListener('progress', onProgress);
+        return () => {
+            video.removeEventListener('timeupdate', onTimeUpdate);
+            video.removeEventListener('progress', onProgress);
+        };
     }, [seekOffset, isTranscoding, subtitleCues, subOffset]);
 
 
@@ -636,11 +665,23 @@ export default function VideoPlayer() {
                         onMouseMove={handleSliderHover}
                         onMouseLeave={() => setHoverTime(null)}
                     >
-                        {/* Buffered Ranges */}
+                        {/* Torrent Buffered Ranges */}
                         {bufferedRanges.map((range, idx) => (
                             <div
                                 key={idx}
                                 className="absolute top-0 h-full bg-white/40 rounded-full transition-all duration-300"
+                                style={{
+                                    left: `${(range.start / (duration || 1)) * 100}%`,
+                                    width: `${Math.max(0, ((range.end - range.start) / (duration || 1)) * 100)}%`
+                                }}
+                            />
+                        ))}
+
+                        {/* HLS Buffered Ranges */}
+                        {hlsBufferedRanges.map((range, idx) => (
+                            <div
+                                key={`hls-${idx}`}
+                                className="absolute top-0 h-full bg-cyan-500/50 rounded-full transition-all duration-300"
                                 style={{
                                     left: `${(range.start / (duration || 1)) * 100}%`,
                                     width: `${Math.max(0, ((range.end - range.start) / (duration || 1)) * 100)}%`
