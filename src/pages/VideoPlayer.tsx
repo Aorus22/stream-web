@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Hls from "hls.js";
 import { useSearchParams } from "react-router-dom";
-import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Captions, Search, Type, ArrowUp, Loader2, RotateCcw, RotateCw } from "lucide-react";
+import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Captions, Search, Type, ArrowUp, Loader2, RotateCcw, RotateCw, Settings } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Toaster } from "../components/ui/sonner";
 import { toast } from "sonner";
@@ -45,6 +45,14 @@ type EmbeddedSubtitle = {
     codec: string;
 };
 
+type SSEStats = {
+    files?: Array<{
+        name?: string;
+        length: number;
+        bufferedRanges?: Array<{ start: number; end: number }>;
+    }>;
+};
+
 export default function VideoPlayer() {
     const { serverUrl } = useServer();
     const [searchParams] = useSearchParams();
@@ -64,10 +72,15 @@ export default function VideoPlayer() {
     const [showControls, setShowControls] = useState(true);
     const [loading, setLoading] = useState(true);
     const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
-    const [isTranscoding, setIsTranscoding] = useState(false);
     const [seekOffset, setSeekOffset] = useState(0);
     const isDraggingRef = useRef(false); // Use ref to avoid stale closure in useEffect
     const seekAmount = 10; // seconds to seek with arrow keys
+
+    // Stream mode: "direct" = fMP4 remux (fast), "hls" = HLS transcoding (compatible)
+    const [streamMode, setStreamMode] = useState<'direct' | 'hls'>(() => {
+        const saved = localStorage.getItem('streamMode');
+        return (saved === 'hls' || saved === 'direct') ? saved : 'direct';
+    });
 
     // Subtitle States
     const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
@@ -157,6 +170,10 @@ export default function VideoPlayer() {
         localStorage.setItem('subPos', String(subPos));
     }, [subPos]);
 
+    useEffect(() => {
+        localStorage.setItem('streamMode', streamMode);
+    }, [streamMode]);
+
     const controlsTimeoutRef = useRef<number>(0);
     const feedbackTimeoutRef = useRef<number>(0);
 
@@ -182,9 +199,6 @@ export default function VideoPlayer() {
                 // Auto fill subtitle query with filename
                 if (file) setSubQuery(file.name.replace(/\./g, " "));
 
-                // Always use HLS for all files
-                setIsTranscoding(true);
-
                 const metaRes = await fetch(`${serverUrl}/api/metadata/${infoHash}/${fileIndex}`);
                 const metaData = await metaRes.json();
                 if (metaData.duration > 0) setDuration(metaData.duration);
@@ -204,12 +218,12 @@ export default function VideoPlayer() {
 
         eventSource.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
+                const data = JSON.parse(event.data) as SSEStats;
                 const file = data.files && data.files[Number(fileIndex)];
 
-                if (file && file.bufferedRanges) {
+                if (file && file.bufferedRanges && file.length) {
                     // Convert byte ranges to time ranges
-                    const ranges = file.bufferedRanges.map((r: any) => ({
+                    const ranges = file.bufferedRanges.map((r) => ({
                         start: (r.start / file.length) * duration,
                         end: (r.end / file.length) * duration
                     }));
@@ -245,20 +259,22 @@ export default function VideoPlayer() {
     }, []);
 
     const handleSeek = useCallback((time: number) => {
-        let targetTime = Math.max(0, Math.min(time, duration));
+        const targetTime = Math.max(0, Math.min(time, duration));
         setCurrentTime(targetTime);
 
-        if (videoRef.current) {
-            videoRef.current.currentTime = targetTime;
-
-            if (isTranscoding && !hlsRef.current && serverUrl) {
+        if (videoRef.current && serverUrl) {
+            if (streamMode === 'hls' && hlsRef.current) {
+                // HLS: just set currentTime, HLS.js handles segment loading
+                videoRef.current.currentTime = targetTime;
+            } else {
+                // Direct: new fMP4 stream from seek position
                 setSeekOffset(targetTime);
                 videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
                 videoRef.current.play();
                 setPlaying(true);
             }
         }
-    }, [duration, isTranscoding, infoHash, fileIndex, serverUrl]);
+    }, [duration, streamMode, infoHash, fileIndex, serverUrl]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -323,17 +339,18 @@ export default function VideoPlayer() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [currentTime, handleSeek, togglePlay]);
 
-    // Initialize HLS or Direct Stream
+    // Initialize stream based on mode
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !serverUrl) return;
 
+        // Cleanup previous HLS instance
         if (hlsRef.current) {
             hlsRef.current.destroy();
             hlsRef.current = null;
         }
 
-        if (isTranscoding) {
+        if (streamMode === 'hls') {
             const hlsUrl = `${serverUrl}/hls/${infoHash}/${fileIndex}/playlist.m3u8`;
 
             if (Hls.isSupported()) {
@@ -366,8 +383,11 @@ export default function VideoPlayer() {
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = hlsUrl;
             }
+            setSeekOffset(0);
         } else {
+            // Direct fMP4 stream — BE remuxes (copy video, re-encode audio only)
             video.src = `${serverUrl}/stream/${infoHash}/${fileIndex}`;
+            setSeekOffset(0);
         }
 
         return () => {
@@ -376,7 +396,7 @@ export default function VideoPlayer() {
                 hlsRef.current = null;
             }
         };
-    }, [isTranscoding, serverUrl, infoHash, fileIndex]);
+    }, [streamMode, serverUrl, infoHash, fileIndex]);
 
     // 2. Time Update & Subtitle Rendering Logic
     useEffect(() => {
@@ -385,7 +405,8 @@ export default function VideoPlayer() {
 
         const onTimeUpdate = () => {
             if (isDraggingRef.current) return;
-            const absTime = isTranscoding ? seekOffset + video.currentTime : video.currentTime;
+            // HLS: currentTime is absolute. Direct: seekOffset + currentTime
+            const absTime = streamMode === 'hls' ? video.currentTime : seekOffset + video.currentTime;
             setCurrentTime(absTime);
 
             if (subtitleCues.length > 0) {
@@ -396,38 +417,21 @@ export default function VideoPlayer() {
                 setCurrentSubtitleText(null);
             }
 
-            // Capture HLS buffer ranges
+            // Capture browser buffered ranges (useful for HLS mode)
             if (video.buffered.length > 0) {
                 const ranges: { start: number; end: number }[] = [];
                 for (let i = 0; i < video.buffered.length; i++) {
-                    const start = video.buffered.start(i);
-                    const end = video.buffered.end(i);
-                    ranges.push({ start, end });
-                }
-                setHlsBufferedRanges(ranges);
-            }
-        };
-
-        const onProgress = () => {
-            // Update HLS buffer on progress event
-            if (video.buffered.length > 0) {
-                const ranges: { start: number; end: number }[] = [];
-                for (let i = 0; i < video.buffered.length; i++) {
-                    const start = video.buffered.start(i);
-                    const end = video.buffered.end(i);
-                    ranges.push({ start, end });
+                    ranges.push({ start: video.buffered.start(i), end: video.buffered.end(i) });
                 }
                 setHlsBufferedRanges(ranges);
             }
         };
 
         video.addEventListener('timeupdate', onTimeUpdate);
-        video.addEventListener('progress', onProgress);
         return () => {
             video.removeEventListener('timeupdate', onTimeUpdate);
-            video.removeEventListener('progress', onProgress);
         };
-    }, [seekOffset, isTranscoding, subtitleCues, subOffset]);
+    }, [streamMode, seekOffset, subtitleCues, subOffset]);
 
 
     // --- Subtitle Actions ---
@@ -639,7 +643,7 @@ export default function VideoPlayer() {
                     <div>
                         <h1 className="font-medium text-lg text-left drop-shadow-md">{fileInfo?.name || "Loading..."}</h1>
                         <p className="text-xs text-white/50 text-left">
-                            {isTranscoding ? "Transcoded" : "Direct"} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
+                            {streamMode === 'hls' ? 'HLS' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
                         </p>
                     </div>
                 </button>
@@ -677,7 +681,7 @@ export default function VideoPlayer() {
                             />
                         ))}
 
-                        {/* HLS Buffered Ranges */}
+                        {/* Browser/HLS Buffered Ranges */}
                         {hlsBufferedRanges.map((range, idx) => (
                             <div
                                 key={`hls-${idx}`}
@@ -875,12 +879,65 @@ export default function VideoPlayer() {
                                             </>
                                         )}
                                     </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
 
-                                    {/* Settings */}
-                                    <div className="space-y-3 pt-2 border-t border-white/10 text-white">
+                        <Popover modal={true}>
+                            <PopoverTrigger asChild>
+                                <button
+                                    className="text-white/70 hover:text-white transition-transform hover:scale-110"
+                                    title="Settings"
+                                >
+                                    <Settings size={24} />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent container={containerRef.current} className="w-64 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white" side="top" align="end">
+                                <div className="flex flex-col gap-3">
+                                    <h3 className="font-bold flex items-center gap-2"><Settings size={18} /> Settings</h3>
+
+                                    {/* Stream Mode Toggle */}
+                                    <div className="space-y-2">
+                                        <span className="text-xs text-white/70">Stream Mode</span>
+                                        <div className="flex rounded-lg overflow-hidden border border-white/10">
+                                            <button
+                                                onClick={() => setStreamMode('direct')}
+                                                className={cn(
+                                                    "flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                                                    streamMode === 'direct'
+                                                        ? "bg-purple-600 text-white"
+                                                        : "bg-white/5 text-white/60 hover:bg-white/10"
+                                                )}
+                                            >
+                                                Direct
+                                            </button>
+                                            <button
+                                                onClick={() => setStreamMode('hls')}
+                                                className={cn(
+                                                    "flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                                                    streamMode === 'hls'
+                                                        ? "bg-purple-600 text-white"
+                                                        : "bg-white/5 text-white/60 hover:bg-white/10"
+                                                )}
+                                            >
+                                                HLS
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-white/40 leading-tight">
+                                            {streamMode === 'direct'
+                                                ? "Fast startup, no video re-encoding. Seek creates new stream."
+                                                : "Slower startup (transcodes segments), but seeking within buffered range is instant."
+                                            }
+                                        </p>
+                                    </div>
+
+                                    {/* Subtitle Settings */}
+                                    <div className="space-y-3 pt-3 border-t border-white/10">
+                                        <h4 className="text-xs font-bold text-white/80">Subtitle</h4>
+
                                         {/* Offset */}
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-white/70">{subOffset >= 0 ? '+' : ''}{subOffset.toFixed(1)}s</span>
+                                            <span className="text-white/70">Offset: {subOffset >= 0 ? '+' : ''}{subOffset.toFixed(1)}s</span>
                                             <div className="flex gap-1 items-center">
                                                 <button
                                                     onClick={handleAutoSync}
@@ -916,9 +973,7 @@ export default function VideoPlayer() {
                                                 <ArrowUp size={14} /> <span>Position (0 = Bottom)</span>
                                             </div>
                                             <div className="relative w-full h-4 flex items-center">
-                                                {/* Center Marker */}
                                                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[1px] h-3 bg-white/40 z-0 pointer-events-none" />
-                                                
                                                 <input
                                                     type="range" min="-100" max="100" step="1"
                                                     value={subPos} onChange={e => setSubPos(Number(e.target.value))}
