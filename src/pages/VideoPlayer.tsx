@@ -17,8 +17,6 @@ const formatTime = (seconds: number) => {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
-
-
 type FileInfo = {
     name: string;
     size: number;
@@ -89,15 +87,62 @@ export default function VideoPlayer() {
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
     const [currentSubtitleText, setCurrentSubtitleText] = useState<string | null>(null);
 
+    // Video Rect for Subtitles
+    const [videoRect, setVideoRect] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+    const updateVideoRect = useCallback(() => {
+        const video = videoRef.current;
+        const container = containerRef.current;
+        if (!video || !container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const videoWidth = video.videoWidth || 16;
+        const videoHeight = video.videoHeight || 9;
+        const videoRatio = videoWidth / videoHeight;
+        const containerRatio = containerRect.width / containerRect.height;
+
+        let width, height, top, left;
+        if (containerRatio > videoRatio) {
+            height = containerRect.height;
+            width = height * videoRatio;
+            top = 0;
+            left = (containerRect.width - width) / 2;
+        } else {
+            width = containerRect.width;
+            height = width / videoRatio;
+            left = 0;
+            top = (containerRect.height - height) / 2;
+        }
+
+        setVideoRect({ top, left, width, height });
+    }, []);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        video.addEventListener('loadedmetadata', updateVideoRect);
+        window.addEventListener('resize', updateVideoRect);
+
+        const observer = new ResizeObserver(updateVideoRect);
+        if (containerRef.current) observer.observe(containerRef.current);
+
+        return () => {
+            video.removeEventListener('loadedmetadata', updateVideoRect);
+            window.removeEventListener('resize', updateVideoRect);
+            observer.disconnect();
+        };
+    }, [updateVideoRect]);
+
     // Style settings - Load from localStorage
     const [subOffset, setSubOffset] = useState(0); // in seconds
     const [subSize, setSubSize] = useState(() => {
         const saved = localStorage.getItem('subSize');
         return saved ? Number(saved) : 100;
     });
-    const [subBottom, setSubBottom] = useState(() => {
-        const saved = localStorage.getItem('subBottom');
-        return saved ? Number(saved) : 10;
+    const [subPos, setSubPos] = useState(() => {
+        const saved = localStorage.getItem('subPos');
+        return saved ? Number(saved) : 0; // Default to bottom area
     });
 
     // Save subtitle settings to localStorage
@@ -106,8 +151,8 @@ export default function VideoPlayer() {
     }, [subSize]);
 
     useEffect(() => {
-        localStorage.setItem('subBottom', String(subBottom));
-    }, [subBottom]);
+        localStorage.setItem('subPos', String(subPos));
+    }, [subPos]);
 
     const controlsTimeoutRef = useRef<number>(0);
     const feedbackTimeoutRef = useRef<number>(0);
@@ -128,11 +173,11 @@ export default function VideoPlayer() {
             try {
                 const statsRes = await fetch(`${serverUrl}/api/stats/${infoHash}`);
                 const statsData = await statsRes.json();
-                const file = statsData.files[Number(fileIndex)];
-                setFileInfo(file);
+                const file = statsData.files && statsData.files[Number(fileIndex)];
+                if (file) setFileInfo(file);
 
                 // Auto fill subtitle query with filename
-                setSubQuery(file.name.replace(/\./g, " "));
+                if (file) setSubQuery(file.name.replace(/\./g, " "));
 
                 // Always use HLS for all files
                 setIsTranscoding(true);
@@ -185,7 +230,6 @@ export default function VideoPlayer() {
     const togglePlay = useCallback(() => {
         if (!videoRef.current) return;
 
-        // Use logic based on current state to decide, but also trust the video element
         if (videoRef.current.paused) {
             videoRef.current.play();
             setPlaying(true);
@@ -204,14 +248,7 @@ export default function VideoPlayer() {
         if (videoRef.current) {
             videoRef.current.currentTime = targetTime;
 
-            // For direct stream manual seeking (legacy/fallback)
-            // But with HLS, we just set currentTime. 
-            // If we are NOT using HLS but "transcoding" via pseudo-streaming (old way), update src.
-            // However, we are moving towards HLS for transcoding.
-            // So if HLS is active, we don't change src.
-
             if (isTranscoding && !hlsRef.current && serverUrl) {
-                // Fallback for non-HLS transcoding (if any)
                 setSeekOffset(targetTime);
                 videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
                 videoRef.current.play();
@@ -238,15 +275,12 @@ export default function VideoPlayer() {
         const percentage = x / width;
 
         if (percentage < 0.3) {
-            // Left 30% -> Rewind 10s
             handleSeek(currentTime - 10);
             triggerFeedback('backward', '10s', 'left');
         } else if (percentage > 0.7) {
-            // Right 30% -> Forward 10s
             handleSeek(currentTime + 10);
             triggerFeedback('forward', '10s', 'right');
         } else {
-            // Center -> Fullscreen
             toggleFullscreen();
         }
     };
@@ -291,7 +325,6 @@ export default function VideoPlayer() {
         const video = videoRef.current;
         if (!video || !serverUrl) return;
 
-        // Cleanup previous HLS
         if (hlsRef.current) {
             hlsRef.current.destroy();
             hlsRef.current = null;
@@ -304,17 +337,14 @@ export default function VideoPlayer() {
                 const hls = new Hls({
                     debug: false,
                     enableWorker: true,
-                    maxBufferLength: 600, // Target: 10 minutes (600s)
-                    maxMaxBufferLength: 1200, // Max: 20 minutes (1200s)
-                    maxBufferSize: 500 * 1000 * 1000, // 500 MB max buffer size
-                    backBufferLength: 60, // Keep 60s of back buffer
+                    maxBufferLength: 600,
+                    maxMaxBufferLength: 1200,
+                    maxBufferSize: 500 * 1000 * 1000,
+                    backBufferLength: 60,
                 });
                 hlsRef.current = hls;
                 hls.loadSource(hlsUrl);
                 hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    // video.play().catch(() => {});
-                });
                 hls.on(Hls.Events.ERROR, (_, data) => {
                     if (data.fatal) {
                         switch (data.type) {
@@ -331,11 +361,9 @@ export default function VideoPlayer() {
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari
                 video.src = hlsUrl;
             }
         } else {
-            // Direct Stream (MP4/WebM)
             video.src = `${serverUrl}/stream/${infoHash}/${fileIndex}`;
         }
 
@@ -353,13 +381,12 @@ export default function VideoPlayer() {
         if (!video) return;
 
         const onTimeUpdate = () => {
-            if (isDraggingRef.current) return; // Don't update time while seeking (check ref)
+            if (isDraggingRef.current) return;
             const absTime = isTranscoding ? seekOffset + video.currentTime : video.currentTime;
             setCurrentTime(absTime);
 
-            // Subtitle Rendering
             if (subtitleCues.length > 0) {
-                const targetTime = absTime - subOffset; // Apply offset delay
+                const targetTime = absTime - subOffset;
                 const cue = subtitleCues.find(c => targetTime >= c.start && targetTime <= c.end);
                 setCurrentSubtitleText(cue ? cue.text : null);
             } else {
@@ -392,9 +419,8 @@ export default function VideoPlayer() {
         if (!serverUrl) return;
         setSelectedSubId(id);
         setCurrentSubLink(link);
-        setSubOffset(0); // Reset offset
+        setSubOffset(0);
         try {
-            // Fetch JSON Cues from Backend
             const res = await fetch(`${serverUrl}/api/subtitles/download?link=${encodeURIComponent(link)}`);
             const data = await res.json();
             if (Array.isArray(data)) {
@@ -416,7 +442,7 @@ export default function VideoPlayer() {
         if (!serverUrl) return;
         setIsLoadingSubtitle(true);
         setSelectedSubId(`embedded-${streamIndex}`);
-        setCurrentSubLink(null); // No link for embedded
+        setCurrentSubLink(null);
         setSubOffset(0);
 
         try {
@@ -457,7 +483,6 @@ export default function VideoPlayer() {
     };
 
     const handleContainerClick = (e: React.MouseEvent) => {
-        // Prevent toggle if clicking on interactive elements
         const target = e.target as HTMLElement;
         if (target.closest('button') || target.closest('input') || target.closest('[data-radix-popper-content-wrapper]')) {
             return;
@@ -479,7 +504,6 @@ export default function VideoPlayer() {
             <video
                 ref={videoRef}
                 className="w-full h-full object-contain"
-                // src removed here, handled in useEffect
                 autoPlay
                 crossOrigin="anonymous"
                 onPlay={() => { setPlaying(true); setLoading(false); }}
@@ -487,9 +511,7 @@ export default function VideoPlayer() {
                 onWaiting={() => setLoading(true)}
                 onPlaying={() => setLoading(false)}
                 onEnded={() => setPlaying(false)}
-            >
-                {/* No native tracks anymore */}
-            </video>
+            />
 
             {/* Play/Pause/Seek Feedback */}
             {feedback && (
@@ -520,24 +542,34 @@ export default function VideoPlayer() {
                 </div>
             )}
 
-            {/* Custom Subtitle Overlay */}
+            {/* Custom Subtitle Overlay - Relative to Video Rect */}
             {currentSubtitleText && (
                 <div
-                    className="absolute text-center px-4 w-full pointer-events-none"
+                    className="absolute pointer-events-none flex items-center justify-center text-center"
                     style={{
-                        bottom: `${subBottom}%`,
+                        top: videoRect.top,
+                        left: videoRect.left,
+                        width: videoRect.width,
+                        height: videoRect.height,
                         zIndex: 30
                     }}
                 >
-                    <span
-                        className="bg-black/50 text-white px-2 py-1 rounded inline-block whitespace-pre-wrap"
+                    <div
+                        className="absolute w-full px-4 flex flex-col items-center justify-center pointer-events-none"
                         style={{
-                            fontSize: `${(subSize / 100) * 1.5}rem`,
-                            textShadow: '0 1px 2px rgba(0,0,0,1)'
+                            bottom: `${10 + (subPos * 0.5)}%`,
                         }}
                     >
-                        {currentSubtitleText}
-                    </span>
+                        <span
+                            className="bg-black/50 text-white px-2 py-1 rounded inline-block whitespace-pre-wrap"
+                            style={{
+                                fontSize: `${Math.max(12, (videoRect.height * 0.045) * (subSize / 100))}px`,
+                                textShadow: '0 1px 2px rgba(0,0,0,1)'
+                            }}
+                        >
+                            {currentSubtitleText}
+                        </span>
+                    </div>
                 </div>
             )}
 
@@ -670,7 +702,7 @@ export default function VideoPlayer() {
                                     <Captions size={24} />
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white" side="top" align="end">
+                            <PopoverContent container={containerRef.current} className="w-80 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white" side="top" align="end">
                                 <div className="flex flex-col gap-4">
                                     <div>
                                         <h3 className="font-bold mb-2 flex items-center gap-2"><Captions size={18} /> Subtitles</h3>
@@ -682,7 +714,6 @@ export default function VideoPlayer() {
                                                 onKeyDown={e => e.key === 'Enter' && searchSubtitles()}
                                             />
 
-                                            {/* Language Flag with Popover (Nested) - simplified for now */}
                                             <div className="relative">
                                                 <Popover open={showLangPopover} onOpenChange={setShowLangPopover}>
                                                     <PopoverTrigger asChild>
@@ -693,7 +724,7 @@ export default function VideoPlayer() {
                                                             {subLang === 'eng' ? '🇬🇧' : '🇮🇩'}
                                                         </button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-1 bg-black/95 border-white/10" side="top" align="end">
+                                                    <PopoverContent container={containerRef.current} className="w-auto p-1 bg-black/95 border-white/10" side="top" align="end">
                                                         <div className="flex flex-col gap-1">
                                                             <button
                                                                 onClick={() => { setSubLang('eng'); setShowLangPopover(false); }}
@@ -814,13 +845,18 @@ export default function VideoPlayer() {
                                         {/* Position */}
                                         <div className="space-y-1">
                                             <div className="flex items-center gap-2 text-xs text-white/80">
-                                                <ArrowUp size={14} /> <span>Position</span>
+                                                <ArrowUp size={14} /> <span>Position (0 = Bottom)</span>
                                             </div>
-                                            <input
-                                                type="range" min="5" max="50" step="1"
-                                                value={subBottom} onChange={e => setSubBottom(Number(e.target.value))}
-                                                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                            />
+                                            <div className="relative w-full h-4 flex items-center">
+                                                {/* Center Marker */}
+                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[1px] h-3 bg-white/40 z-0 pointer-events-none" />
+                                                
+                                                <input
+                                                    type="range" min="-100" max="100" step="1"
+                                                    value={subPos} onChange={e => setSubPos(Number(e.target.value))}
+                                                    className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500 z-10 relative"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
