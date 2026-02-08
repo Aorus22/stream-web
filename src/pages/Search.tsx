@@ -169,7 +169,7 @@ export function Search() {
                     </div>
                 </div>
 
-                <Card>
+                <Card className="pt-0">
                     <CardContent className="pt-6">
                         <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
                              <Select value={selectedProvider} onValueChange={setSelectedProvider}>

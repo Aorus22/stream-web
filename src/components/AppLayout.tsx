@@ -4,6 +4,7 @@ import {
     Search,
     Download,
     LogOut,
+    Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { useServer } from "@/contexts/ServerContext";
 import { useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type NavItem = {
     icon: React.ElementType;
@@ -54,6 +57,7 @@ export function Sidebar() {
     const location = useLocation();
     const { setServerUrl } = useServer();
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
 
     const handleDisconnect = () => {
         setServerUrl(null);
@@ -62,78 +66,128 @@ export function Sidebar() {
 
     return (
         <TooltipProvider delayDuration={0}>
-            <aside className="fixed left-0 top-0 z-40 h-screen w-16 flex flex-col bg-background/80 backdrop-blur-xl border-r border-border">
-                {/* Logo */}
-                <div className="flex h-16 items-center justify-center border-b border-border">
-                    <Link to="/" className="flex items-center justify-center p-2">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-primary/20">
-                            <AppLogo />
-                        </div>
-                    </Link>
-                </div>
+            {isMobile ? (
+                <aside className="fixed bottom-0 left-0 right-0 z-50 h-16 flex items-center justify-center bg-background/95 backdrop-blur-xl border-t border-border px-4">
+                    <nav className="flex items-center gap-1 w-full max-w-md">
+                        {navItems.map((item) => {
+                            const isActive = location.pathname === item.href ||
+                                (item.href !== "/" && location.pathname.startsWith(item.href));
 
-                {/* Main Navigation */}
-                <nav className="flex-1 flex flex-col items-center gap-2 py-4">
-                    {navItems.map((item) => {
-                        const isActive = location.pathname === item.href ||
-                            (item.href !== "/" && location.pathname.startsWith(item.href));
-
-                        return (
-                            <Tooltip key={item.href}>
-                                <TooltipTrigger asChild>
+                            return (
+                                <Link
+                                    key={item.href}
+                                    to={item.href}
+                                    className={cn(
+                                        "flex-1 flex items-center justify-center py-2 rounded-xl transition-all duration-200",
+                                        isActive
+                                            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                    )}
+                                >
+                                    <item.icon className="size-5" />
+                                </Link>
+                            );
+                        })}
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="flex-1 text-muted-foreground hover:text-foreground rounded-xl transition-all duration-200"
+                                >
+                                    <Menu className="size-5" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-48">
+                                <div className="flex flex-col gap-2">
                                     <Button
                                         variant="ghost"
-                                        size="icon"
-                                        className={cn(
-                                            "size-11 rounded-xl transition-all duration-200",
-                                            isActive
-                                                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                        )}
-                                        asChild
+                                        className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={handleDisconnect}
                                     >
-                                        <Link to={item.href}>
-                                            <item.icon className="size-5" />
-                                        </Link>
+                                        <LogOut className="size-4" />
+                                        Disconnect
                                     </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right" sideOffset={10}>
-                                    {item.label}
-                                </TooltipContent>
-                            </Tooltip>
-                        );
-                    })}
-                </nav>
-
-                {/* Bottom - Disconnect & Theme Switcher */}
-                <div className="flex flex-col items-center gap-2 py-4 border-t border-border">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all duration-200"
-                                onClick={handleDisconnect}
-                            >
-                                <LogOut className="size-5" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" sideOffset={10}>
-                            Disconnect
-                        </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="size-11 flex items-center justify-center">
-                                <ThemeSwitcher />
+                                    <div className="flex items-center justify-between px-2 py-1">
+                                        <span className="text-sm text-muted-foreground">Theme</span>
+                                        <ThemeSwitcher />
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </nav>
+                </aside>
+            ) : (
+                <aside className="fixed left-0 top-0 z-40 h-screen w-16 flex flex-col bg-background/80 backdrop-blur-xl border-r border-border">
+                    <div className="flex h-16 items-center justify-center border-b border-border">
+                        <Link to="/" className="flex items-center justify-center p-2">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-primary/20">
+                                <AppLogo />
                             </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" sideOffset={10}>
-                            Toggle Theme
-                        </TooltipContent>
-                    </Tooltip>
-                </div>
-            </aside>
+                        </Link>
+                    </div>
+
+                    <nav className="flex-1 flex flex-col items-center gap-2 py-4">
+                        {navItems.map((item) => {
+                            const isActive = location.pathname === item.href ||
+                                (item.href !== "/" && location.pathname.startsWith(item.href));
+
+                            return (
+                                <Tooltip key={item.href}>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={cn(
+                                                "size-11 rounded-xl transition-all duration-200",
+                                                isActive
+                                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                            )}
+                                            asChild
+                                        >
+                                            <Link to={item.href}>
+                                                <item.icon className="size-5" />
+                                            </Link>
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" sideOffset={10}>
+                                        {item.label}
+                                    </TooltipContent>
+                                </Tooltip>
+                            );
+                        })}
+                    </nav>
+
+                    <div className="flex flex-col items-center gap-2 py-4 border-t border-border">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all duration-200"
+                                    onClick={handleDisconnect}
+                                >
+                                    <LogOut className="size-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={10}>
+                                Disconnect
+                            </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="size-11 flex items-center justify-center">
+                                    <ThemeSwitcher />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={10}>
+                                Toggle Theme
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+                </aside>
+            )}
         </TooltipProvider>
     );
 }
@@ -141,6 +195,7 @@ export function Sidebar() {
 export function AppLayout({ children }: { children: React.ReactNode }) {
     const { serverUrl, isConnected } = useServer();
     const location = useLocation();
+    const isMobile = useIsMobile();
 
     const getDisplayUrl = () => {
         if (!serverUrl) return null;
@@ -155,11 +210,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
             <Sidebar />
-            <main className="pl-16">
-                {children}
+            <main className={cn(
+                "max-h-dvh overflow-y-auto",
+                isMobile ? "pb-20 px-4 pt-8" : "pl-16 p-8"
+            )}>
+                <div className="max-w-6xl mx-auto">
+                    {children}
+                </div>
             </main>
             {serverUrl && location.pathname !== '/watch' && (
-                <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-md rounded-full border border-border shadow-lg">
+                <div className={cn(
+                    "fixed z-50 flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-md rounded-full border border-border shadow-lg",
+                    isMobile ? "bottom-20 right-4" : "bottom-4 right-4"
+                )}>
                     <div className={cn(
                         "w-2 h-2 rounded-full animate-pulse",
                         isConnected ? "bg-success" : "bg-destructive"

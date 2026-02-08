@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, ExternalLink, RefreshCw, XCircle, Folder, FileVideo } from "lucide-react";
+import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, RefreshCw, Folder, FileVideo } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,7 +129,7 @@ export function Dashboard() {
 
             setMagnet("");
             fetchTorrents();
-        } catch (err) {
+        } catch {
             setError("Invalid magnet link or server error");
         } finally {
             setLoading(false);
@@ -144,15 +144,6 @@ export function Dashboard() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-    };
-
-    const killStream = async () => {
-        if (!serverUrl) return;
-        try {
-            await fetch(`${serverUrl}/api/stream/active`, { method: "DELETE" });
-        } catch (err) {
-            console.error("Failed to kill stream", err);
-        }
     };
 
     const deleteCachedFolder = async (infoHash: string) => {
@@ -180,8 +171,8 @@ export function Dashboard() {
         try {
             await fetch(`${serverUrl}/api/cache/all`, { method: "DELETE" });
             fetchCachedFiles();
-        } catch (err) {
-            console.error("Failed to remove all cache:", err);
+        } catch {
+            console.error("Failed to remove all cache");
         }
     };
 
@@ -196,64 +187,63 @@ export function Dashboard() {
 
     return (
         <TooltipProvider>
-            <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
-                <div className="max-w-6xl mx-auto space-y-8">
+            <div className="space-y-6">
 
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-primary/10 rounded-2xl ring-1 ring-primary/20">
-                                <Film className="size-8 text-primary" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">TorrentStream</h1>
-                                <p className="text-muted-foreground text-sm md:text-base">Fast, seekable torrent streaming</p>
-                            </div>
-                        </div>
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-xl ring-1 ring-primary/20">
+                        <Film className="size-6 text-primary" />
                     </div>
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
+                        <p className="text-muted-foreground text-xs md:text-sm">Manage your torrents</p>
+                    </div>
+                </div>
 
-                    {/* Add Torrent Card */}
-                    <Card className="border-dashed border-2 transition-colors">
-                        <CardContent className="pt-6">
-                            <form onSubmit={addMagnet} className="flex flex-col md:flex-row gap-4">
-                                <div className="flex-1 relative">
-                                    <Input
-                                        type="text"
-                                        placeholder="Paste Magnet Link here..."
-                                        className="h-12 text-base pl-4 pr-4"
-                                        value={magnet}
-                                        onChange={(e) => setMagnet(e.target.value)}
-                                    />
-                                </div>
-                                <Button
-                                    type="submit"
-                                    size="lg"
-                                    disabled={loading || !magnet}
-                                    className="h-12 px-8 gap-2"
-                                >
-                                    {loading ? (
-                                        <div className="size-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                                    ) : (
-                                        <Download className="size-5" />
-                                    )}
-                                    Add Torrent
-                                </Button>
-                            </form>
-                            {error && (
-                                <p className="text-destructive text-sm mt-3 flex items-center gap-2">
-                                    <span className="size-1.5 bg-destructive rounded-full" />
-                                    {error}
-                                </p>
-                            )}
-                        </CardContent>
-                    </Card>
+                <Card className="border-dashed border-2 transition-colors pt-0">
+                    <CardContent className="pt-4">
+                        <form onSubmit={addMagnet} className="flex flex-col gap-3">
+                            <Input
+                                type="text"
+                                placeholder="Paste Magnet Link here..."
+                                className="h-12 text-base"
+                                value={magnet}
+                                onChange={(e) => setMagnet(e.target.value)}
+                            />
+                            <Button
+                                type="submit"
+                                size="lg"
+                                disabled={loading || !magnet}
+                                className="w-full h-12 gap-2"
+                            >
+                                {loading ? (
+                                    <div className="size-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                                ) : (
+                                    <Download className="size-5" />
+                                )}
+                                Add Torrent
+                            </Button>
+                        </form>
+                        {error && (
+                            <p className="text-destructive text-sm mt-3 flex items-center gap-2">
+                                <span className="size-1.5 bg-destructive rounded-full" />
+                                {error}
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
 
-                    {/* Torrents Section */}
                     <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-8 w-1 bg-primary rounded-full" />
-                            <h2 className="text-xl font-semibold">Active Torrents</h2>
-                            <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-1 bg-primary rounded-full" />
+                                <div>
+                                    <h2 className="text-xl font-semibold">Active Torrents</h2>
+                                    <Badge variant="secondary" className="mt-1">
+                                        {torrents.length} {torrents.length === 1 ? 'torrent' : 'torrents'}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                                 {torrents.length > 0 && (
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
@@ -277,19 +267,6 @@ export function Dashboard() {
                                         </AlertDialogContent>
                                     </AlertDialog>
                                 )}
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="destructive"
-                                            size="icon"
-                                            onClick={killStream}
-                                            className="h-8 w-8 bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 border"
-                                        >
-                                            <XCircle className="size-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Force Stop Active Stream</TooltipContent>
-                                </Tooltip>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -299,9 +276,6 @@ export function Dashboard() {
                                 >
                                     <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
                                 </Button>
-                                <Badge variant="secondary">
-                                    {torrents.length} {torrents.length === 1 ? 'torrent' : 'torrents'}
-                                </Badge>
                             </div>
                         </div>
 
@@ -395,15 +369,37 @@ export function Dashboard() {
                                                         key={i}
                                                         className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg group/file transition-colors"
                                                     >
-                                                        <div className="flex-1 min-w-0 pr-4 space-y-1">
+                                                        <div className="flex-1 min-w-0 space-y-2 md:space-y-1">
                                                             <div className="text-sm font-medium truncate">{f.name}</div>
                                                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                                 <span>{formatBytes(f.length)}</span>
                                                                 <span className="text-muted-foreground/50">•</span>
                                                                 <span className="tabular-nums">{f.progress.toFixed(1)}% ready</span>
                                                             </div>
+                                                            <div className="flex gap-2 md:hidden pt-1 justify-end">
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon-sm"
+                                                                            onClick={() => copyToClipboard(`${serverUrl}/stream/${t.infoHash}/${i}`)}
+                                                                        >
+                                                                            <Copy className="size-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>Copy Stream URL</TooltipContent>
+                                                                </Tooltip>
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => window.location.href = `/watch?infoHash=${t.infoHash}&fileIndex=${i}`}
+                                                                    className="gap-1.5"
+                                                                >
+                                                                    <Play className="size-4" fill="currentColor" />
+                                                                    Play
+                                                                </Button>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex gap-2">
+                                                        <div className="hidden md:flex gap-2">
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
                                                                     <Button
@@ -415,18 +411,6 @@ export function Dashboard() {
                                                                     </Button>
                                                                 </TooltipTrigger>
                                                                 <TooltipContent>Copy Stream URL</TooltipContent>
-                                                            </Tooltip>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon-sm"
-                                                                        onClick={() => window.open(`${serverUrl}/stream/${t.infoHash}/${i}`, '_blank')}
-                                                                    >
-                                                                        <ExternalLink className="size-4" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>Open in New Tab</TooltipContent>
                                                             </Tooltip>
                                                             <Button
                                                                 size="sm"
@@ -447,12 +431,24 @@ export function Dashboard() {
                         )}
                     </div>
 
-                    {/* Cached Videos Section */}
                     <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-8 w-1 bg-green-500 rounded-full" />
-                            <h2 className="text-xl font-semibold">Cached Videos</h2>
-                            <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-1 bg-green-500 rounded-full" />
+                                <div>
+                                    <h2 className="text-xl font-semibold">Cached Videos</h2>
+                                    <div className="flex gap-2 mt-1">
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            <HardDrive className="size-3" />
+                                            {cacheStats ? formatBytes(cacheStats.totalSize) : '0 B'}
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            {Object.keys(groupedCache).length} folders
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                                 {Object.keys(groupedCache).length > 0 && (
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
@@ -485,15 +481,6 @@ export function Dashboard() {
                                 >
                                     <RefreshCw className={cn("size-4", refreshingCache && "animate-spin")} />
                                 </Button>
-                                {cacheStats && (
-                                    <Badge variant="secondary" className="gap-1.5">
-                                        <HardDrive className="size-3" />
-                                        {formatBytes(cacheStats.totalSize)}
-                                    </Badge>
-                                )}
-                                <Badge variant="outline">
-                                    {Object.keys(groupedCache).length} folders
-                                </Badge>
                             </div>
                         </div>
 
@@ -551,14 +538,36 @@ export function Dashboard() {
                                                         key={i}
                                                         className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg transition-colors"
                                                     >
-                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                            <FileVideo className="size-5 text-muted-foreground flex-shrink-0" />
-                                                            <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1 md:items-start">
+                                                            <FileVideo className="size-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                                            <div className="min-w-0 flex-1 space-y-2 md:space-y-0">
                                                                 <div className="text-sm font-medium truncate">{file.name}</div>
                                                                 <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
+                                                                <div className="flex gap-2 md:hidden pt-1 justify-end">
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon-sm"
+                                                                                onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex}`)}
+                                                                            >
+                                                                                <Copy className="size-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Copy Stream URL</TooltipContent>
+                                                                    </Tooltip>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex}`}
+                                                                        className="gap-1.5"
+                                                                    >
+                                                                        <Play className="size-4" fill="currentColor" />
+                                                                        Play
+                                                                    </Button>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div className="flex gap-2">
+                                                        <div className="hidden md:flex gap-2">
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
                                                                     <Button
@@ -589,8 +598,6 @@ export function Dashboard() {
                             </div>
                         )}
                     </div>
-
-                </div>
             </div>
         </TooltipProvider >
     );
