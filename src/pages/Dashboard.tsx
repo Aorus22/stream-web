@@ -66,7 +66,7 @@ type DirectDownload = {
     id: number;
     url: string;
     filename: string;
-    status: 'downloading' | 'completed' | 'failed' | 'missing' | 'orphan';
+    status: 'downloading' | 'completed' | 'failed' | 'missing' | 'orphan' | 'on_demand';
     progress: number;
     downloadedBytes: number;
     totalBytes: number;
@@ -185,7 +185,7 @@ export function Dashboard() {
             const res = await fetch(`${serverUrl}/api/direct/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: directUrl })
+                body: JSON.stringify({ url: directUrl, mode: "ondemand" })
             });
 
             if (!res.ok) throw new Error("Failed to add direct download");
@@ -226,7 +226,7 @@ export function Dashboard() {
                             <div className="text-xs text-muted-foreground truncate">{status}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                            {status === "completed" && (
+                            {(status === "completed" || status === "on_demand") && (
                                 <Button
                                     size="sm"
                                     onClick={() => window.location.href = `/watch?directId=${dl.id}`}
@@ -369,7 +369,7 @@ export function Dashboard() {
                                     ) : (
                                         <Download className="size-5" />
                                     )}
-                                    Download
+                                    Stream (On-demand)
                                 </Button>
                             </form>
                         )}
