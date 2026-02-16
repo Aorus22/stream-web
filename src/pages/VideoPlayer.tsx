@@ -65,7 +65,7 @@ export default function VideoPlayer() {
     const [showControls, setShowControls] = useState(true);
     const [loading, setLoading] = useState(true);
     const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
-    const [seekOffset, setSeekOffset] = useState(0);
+    const seekOffsetRef = useRef(0);
     const isDraggingRef = useRef(false); // Use ref to avoid stale closure in useEffect
     const seekAmount = 10; // seconds to seek with arrow keys
 
@@ -192,7 +192,7 @@ export default function VideoPlayer() {
 
                 const metaRes = await fetch(`${serverUrl}/api/metadata/${infoHash}/${fileIndex}`);
                 const metaData = await metaRes.json();
-                if (metaData.duration > 0) setDuration(metaData.duration);
+                if (metaData.duration > 0) setDuration((prev) => Math.max(prev, metaData.duration));
                 if (metaData.subtitles) setEmbeddedSubs(metaData.subtitles);
             } catch (err) {
                 console.error("Metadata error", err);
@@ -250,22 +250,27 @@ export default function VideoPlayer() {
     }, []);
 
     const syncDurationFromVideo = useCallback(() => {
-        // For torrent sources we trust BE-reported duration (ffprobe/metadata).
-        // For direct downloads there is no /api/metadata equivalent yet, so use the browser's duration.
-        if (!isDirectDownload) return;
         const video = videoRef.current;
         if (!video) return;
         const d = video.duration;
-        if (Number.isFinite(d) && d > 0) {
-            setDuration(d);
-        }
-    }, [isDirectDownload]);
+        if (!Number.isFinite(d) || d <= 0) return;
+
+        if (!isDirectDownload && streamMode !== 'direct') return;
+
+        setDuration((prev) => {
+            if (prev <= 0) return d;
+            if (d > prev) return d;
+            return prev;
+        });
+    }, [isDirectDownload, streamMode]);
 
     const handleSeek = useCallback((time: number) => {
         const video = videoRef.current;
         const videoDuration = video?.duration;
-        const effectiveDuration = (Number.isFinite(videoDuration) && (videoDuration as number) > 0) ? (videoDuration as number) : duration;
-        const targetTime = Math.max(0, Math.min(time, effectiveDuration));
+        const observedDuration = (Number.isFinite(videoDuration) && (videoDuration as number) > 0) ? (videoDuration as number) : 0;
+        const effectiveDuration = Math.max(duration, observedDuration);
+        const clampMax = effectiveDuration > 0 ? effectiveDuration : time;
+        const targetTime = Math.max(0, Math.min(time, clampMax));
         setCurrentTime(targetTime);
 
         if (videoRef.current && serverUrl) {
@@ -273,16 +278,16 @@ export default function VideoPlayer() {
                 // HLS: just set currentTime, HLS.js handles segment loading
                 videoRef.current.currentTime = targetTime;
             } else {
-                if (isDirectDownload) {
-                    videoRef.current.currentTime = targetTime;
-                    videoRef.current.play();
-                    setPlaying(true);
-                } else {
-                    // Direct: new fMP4 stream from seek position
-                    setSeekOffset(targetTime);
-                    videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
-                    videoRef.current.play();
-                    setPlaying(true);
+                    if (isDirectDownload) {
+                        videoRef.current.currentTime = targetTime;
+                        videoRef.current.play();
+                        setPlaying(true);
+                    } else {
+                        // Direct: new fMP4 stream from seek position
+                        seekOffsetRef.current = targetTime;
+                        videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
+                        videoRef.current.play();
+                        setPlaying(true);
                 }
             }
         }
@@ -421,7 +426,7 @@ export default function VideoPlayer() {
         const onTimeUpdate = () => {
             if (isDraggingRef.current) return;
             // HLS: currentTime is absolute. Direct: seekOffset + currentTime
-            const absTime = isDirectDownload ? video.currentTime : (streamMode === 'hls' ? video.currentTime : seekOffset + video.currentTime);
+            const absTime = isDirectDownload ? video.currentTime : (streamMode === 'hls' ? video.currentTime : seekOffsetRef.current + video.currentTime);
             setCurrentTime(absTime);
 
             if (subtitleCues.length > 0) {
@@ -446,7 +451,7 @@ export default function VideoPlayer() {
         return () => {
             video.removeEventListener('timeupdate', onTimeUpdate);
         };
-    }, [streamMode, seekOffset, subtitleCues, subOffset, isDirectDownload]);
+    }, [streamMode, subtitleCues, subOffset, isDirectDownload]);
 
     const handleContainerClick = (e: React.MouseEvent) => {
         const target = e.target as HTMLElement;
@@ -472,7 +477,7 @@ export default function VideoPlayer() {
         const frame = window.requestAnimationFrame(() => {
             setCurrentTime(0);
             setDuration(0);
-            setSeekOffset(0);
+            seekOffsetRef.current = 0;
             setBufferedRanges([]);
             setHlsBufferedRanges([]);
             setHoverTime(null);
