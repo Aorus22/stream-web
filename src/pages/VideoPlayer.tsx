@@ -466,14 +466,20 @@ export default function VideoPlayer() {
 
     // Reset timeline state when switching sources (torrent <-> direct, or different file)
     useEffect(() => {
-        setCurrentTime(0);
-        setDuration(0);
-        setSeekOffset(0);
-        setBufferedRanges([]);
-        setHlsBufferedRanges([]);
-        setHoverTime(null);
-        setHoverPosition(0);
-        setLoading(true);
+        const frame = window.requestAnimationFrame(() => {
+            setCurrentTime(0);
+            setDuration(0);
+            setSeekOffset(0);
+            setBufferedRanges([]);
+            setHlsBufferedRanges([]);
+            setHoverTime(null);
+            setHoverPosition(0);
+            setLoading(true);
+        });
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+        };
     }, [infoHash, fileIndex, isDirectDownload, directId]);
 
     return (
@@ -704,41 +710,39 @@ export default function VideoPlayer() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {!isDirectDownload && (
-                            <>
-                                <SubtitlePopover
-                                    containerRef={containerRef}
-                                    subtitleCues={subtitleCues}
-                                    setSubtitleCues={setSubtitleCues}
-                                    embeddedSubs={embeddedSubs}
-                                    selectedSubId={selectedSubId}
-                                    setSelectedSubId={setSelectedSubId}
-                                    setCurrentSubLink={setCurrentSubLink}
-                                    infoHash={infoHash}
-                                    fileIndex={fileIndex}
-                                    serverUrl={serverUrl}
-                                    setSubOffset={setSubOffset}
-                                    initialQuery={fileInfo?.name ? fileInfo.name.replace(/\./g, " ") : ""}
-                                />
+                        <>
+                            <SubtitlePopover
+                                containerRef={containerRef}
+                                subtitleCues={subtitleCues}
+                                setSubtitleCues={setSubtitleCues}
+                                embeddedSubs={embeddedSubs}
+                                selectedSubId={selectedSubId}
+                                setSelectedSubId={setSelectedSubId}
+                                setCurrentSubLink={setCurrentSubLink}
+                                infoHash={infoHash}
+                                fileIndex={fileIndex}
+                                serverUrl={serverUrl}
+                                setSubOffset={setSubOffset}
+                                initialQuery={fileInfo?.name ? fileInfo.name.replace(/\./g, " ") : ""}
+                            />
 
-                                <SettingsPopover
-                                    containerRef={containerRef}
-                                    streamMode={streamMode}
-                                    setStreamMode={setStreamMode}
-                                    subOffset={subOffset}
-                                    setSubOffset={setSubOffset}
-                                    subSize={subSize}
-                                    setSubSize={setSubSize}
-                                    subPos={subPos}
-                                    setSubPos={setSubPos}
-                                    currentSubLink={currentSubLink}
-                                    infoHash={infoHash}
-                                    fileIndex={fileIndex}
-                                    serverUrl={serverUrl}
-                                    currentTime={currentTime}
-                                />
-                            </>
-                        )}
+                            <SettingsPopover
+                                containerRef={containerRef}
+                                streamMode={streamMode}
+                                setStreamMode={setStreamMode}
+                                subOffset={subOffset}
+                                setSubOffset={setSubOffset}
+                                subSize={subSize}
+                                setSubSize={setSubSize}
+                                subPos={subPos}
+                                setSubPos={setSubPos}
+                                currentSubLink={currentSubLink}
+                                infoHash={infoHash}
+                                fileIndex={fileIndex}
+                                serverUrl={serverUrl}
+                                currentTime={currentTime}
+                            />
+                        </>
 
                         <button onClick={toggleFullscreen} className="text-white/70 hover:text-white pointer-events-auto">
                             {fullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
