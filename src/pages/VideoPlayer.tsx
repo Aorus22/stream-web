@@ -479,7 +479,7 @@ export default function VideoPlayer() {
     return (
         <div
             ref={containerRef}
-            className="group relative w-full h-screen bg-black overflow-hidden flex items-center justify-center font-sans select-none"
+            className="group relative w-full h-dvh bg-black overflow-hidden flex items-center justify-center font-sans select-none"
             onMouseMove={handleMouseMove}
             onDoubleClick={handleDoubleClick}
             onClick={handleContainerClick}
@@ -574,21 +574,18 @@ export default function VideoPlayer() {
 
             {/* Top Bar */}
             <div className={cn(
-                "absolute top-0 left-0 right-0 p-6 flex justify-between items-start transition-all duration-300 z-20",
+                "absolute top-0 left-0 right-0 p-6 transition-all duration-300 z-20",
                 showControls ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
             )}>
-
-                <button onClick={() => window.location.href = '/'} className="flex items-center gap-3 text-white/80 hover:text-white transition-colors group/back pointer-events-auto">
-                    <div className="p-2 bg-white/10 rounded-full group-hover/back:bg-white/20">
-                        <ArrowLeft size={20} />
-                    </div>
-                    <div>
-                        <h1 className="font-medium text-lg text-left drop-shadow-md">{fileInfo?.name || "Loading..."}</h1>
-                        <p className="text-xs text-white/50 text-left">
-                            {streamMode === 'hls' ? 'HLS' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
-                        </p>
-                    </div>
+                <button onClick={() => window.location.href = '/'} className="absolute top-6 left-6 flex items-center justify-center p-2 bg-white/10 rounded-full text-white/80 hover:text-white hover:bg-white/20 transition-colors pointer-events-auto">
+                    <ArrowLeft size={20} />
                 </button>
+                <div className="pl-12">
+                    <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{fileInfo?.name || "Loading..."}</h1>
+                    <p className="text-xs text-white/50 text-left">
+                        {streamMode === 'hls' ? 'HLS' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
+                    </p>
+                </div>
             </div>
 
             {/* Bottom Controls */}

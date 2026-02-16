@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Captions, Search, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
@@ -56,18 +56,20 @@ export default function SubtitlePopover({
     setSubOffset,
     initialQuery = ""
 }: SubtitlePopoverProps) {
-    const [subQuery, setSubQuery] = useState(initialQuery);
     const [subLang, setSubLang] = useState("eng");
     const [searchingSubs, setSearchingSubs] = useState(false);
     const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
     const [showLangPopover, setShowLangPopover] = useState(false);
     const [isLoadingSubtitle, setIsLoadingSubtitle] = useState(false);
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const [searchInput, setSearchInput] = useState(initialQuery);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const searchSubtitles = async () => {
-        if (!subQuery || !serverUrl) return;
+        if (!searchInput || !serverUrl) return;
         setSearchingSubs(true);
         try {
-            const res = await fetch(`${serverUrl}/api/subtitles/search?query=${encodeURIComponent(subQuery)}&lang=${subLang}`);
+            const res = await fetch(`${serverUrl}/api/subtitles/search?query=${encodeURIComponent(searchInput)}&lang=${subLang}`);
             const data = await res.json();
             setSubtitles(data || []);
         } catch (e) {
@@ -126,8 +128,14 @@ export default function SubtitlePopover({
         }
     };
 
+    useEffect(() => {
+        if (popoverOpen) {
+            setSearchInput(initialQuery);
+        }
+    }, [popoverOpen, initialQuery]);
+
     return (
-        <Popover modal={true}>
+        <Popover modal={true} open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
                 <button
                     className={cn("transition-transform hover:scale-110", subtitleCues.length > 0 ? "text-purple-400" : "text-white/70 hover:text-white")}
@@ -136,16 +144,25 @@ export default function SubtitlePopover({
                     <Captions size={24} />
                 </button>
             </PopoverTrigger>
-            <PopoverContent container={containerRef.current || undefined} className="w-80 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white" side="top" align="end">
+            <PopoverContent
+                container={containerRef.current || undefined}
+                className="w-80 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white"
+                side="top"
+                align="end"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <div className="flex flex-col gap-4">
                     <div>
                         <h3 className="font-bold mb-2 flex items-center gap-2"><Captions size={18} /> Subtitles</h3>
                         <div className="flex gap-2">
                             <input
+                                ref={inputRef}
                                 className="bg-white/10 border-none rounded px-2 py-1 flex-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                                value={subQuery} onChange={e => setSubQuery(e.target.value)}
+                                value={searchInput}
+                                onChange={e => setSearchInput(e.target.value)}
                                 placeholder="Search..."
                                 onKeyDown={e => e.key === 'Enter' && searchSubtitles()}
+                                tabIndex={-1}
                             />
 
                             <div className="relative">
