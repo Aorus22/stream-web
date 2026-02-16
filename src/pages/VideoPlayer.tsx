@@ -250,13 +250,16 @@ export default function VideoPlayer() {
     }, []);
 
     const syncDurationFromVideo = useCallback(() => {
+        // For torrent sources we trust BE-reported duration (ffprobe/metadata).
+        // For direct downloads there is no /api/metadata equivalent yet, so use the browser's duration.
+        if (!isDirectDownload) return;
         const video = videoRef.current;
         if (!video) return;
         const d = video.duration;
         if (Number.isFinite(d) && d > 0) {
             setDuration(d);
         }
-    }, []);
+    }, [isDirectDownload]);
 
     const handleSeek = useCallback((time: number) => {
         const video = videoRef.current;
@@ -480,7 +483,7 @@ export default function VideoPlayer() {
         return () => {
             window.cancelAnimationFrame(frame);
         };
-    }, [infoHash, fileIndex, isDirectDownload, directId]);
+    }, [infoHash, fileIndex]);
 
     return (
         <div
