@@ -595,15 +595,31 @@ export function Dashboard() {
                                     </div>
                                 </div>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={fetchDirectDownloads}
-                                className="gap-2"
-                            >
-                                <RefreshCw className={cn("size-4", refreshingDirect ? "animate-spin" : "")} />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={fetchDirectDownloads}
+                                    className="gap-2"
+                                >
+                                    <RefreshCw className={cn("size-4", refreshingDirect ? "animate-spin" : "")} />
+                                    Refresh
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                        if (!serverUrl) return;
+                                        await fetch(`${serverUrl}/api/direct/all`, { method: "DELETE" });
+                                        fetchDirectDownloads();
+                                        fetchCachedFiles();
+                                    }}
+                                    className="gap-2 text-destructive border-destructive/40 hover:bg-destructive/10"
+                                >
+                                    <Trash2 className="size-4" />
+                                    Clear All
+                                </Button>
+                            </div>
                         </div>
 
                         {directDownloads.length === 0 ? (
