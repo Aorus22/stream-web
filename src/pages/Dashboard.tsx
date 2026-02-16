@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
+import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 
 type TorrentFile = {
     name: string;
@@ -45,14 +46,33 @@ type CachedFile = {
     name: string;
     path: string;
     size: number;
-    infoHash: string;
-    fileIndex: number;
+    type: 'magnet' | 'direct';
+    infoHash?: string;
+    fileIndex?: number;
+    downloadId?: number;
+    progress?: number;
+    status?: string;
+    streamUrl: string;
+    canPlay: boolean;
 };
 
 type CacheStats = {
     totalSize: number;
     fileCount: number;
     cacheDir: string;
+};
+
+type DirectDownload = {
+    id: number;
+    url: string;
+    filename: string;
+    status: 'downloading' | 'completed' | 'failed' | 'missing' | 'orphan';
+    progress: number;
+    downloadedBytes: number;
+    totalBytes: number;
+    filePath: string;
+    addedAt: string;
+    completedAt?: string;
 };
 
 const formatBytes = (bytes: number) => {
@@ -69,9 +89,13 @@ export function Dashboard() {
     const [cachedFiles, setCachedFiles] = useState<CachedFile[]>([]);
     const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
     const [magnet, setMagnet] = useState("");
+    const [inputType, setInputType] = useState<'magnet' | 'direct'>('magnet');
+    const [directUrl, setDirectUrl] = useState('');
+    const [directDownloads, setDirectDownloads] = useState<DirectDownload[]>([]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [refreshingCache, setRefreshingCache] = useState(false);
+    const [refreshingDirect, setRefreshingDirect] = useState(false);
     const [error, setError] = useState("");
 
     const fetchTorrents = async () => {
@@ -107,9 +131,24 @@ export function Dashboard() {
         }
     };
 
+    const fetchDirectDownloads = async () => {
+        if (!serverUrl) return;
+        setRefreshingDirect(true);
+        try {
+            const res = await fetch(`${serverUrl}/api/direct`);
+            const data = await res.json();
+            setDirectDownloads(data || []);
+        } catch (err) {
+            console.error("Failed to fetch direct downloads:", err);
+        } finally {
+            setRefreshingDirect(false);
+        }
+    };
+
     useEffect(() => {
         fetchTorrents();
         fetchCachedFiles();
+        fetchDirectDownloads();
     }, []);
 
     const addMagnet = async (e: React.FormEvent) => {
@@ -136,6 +175,31 @@ export function Dashboard() {
         }
     };
 
+    const addDirectDownload = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!directUrl || !serverUrl) return;
+        setLoading(true);
+        setError("");
+
+        try {
+            const res = await fetch(`${serverUrl}/api/direct/add`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: directUrl })
+            });
+
+            if (!res.ok) throw new Error("Failed to add direct download");
+
+            setDirectUrl("");
+            fetchDirectDownloads();
+            fetchCachedFiles();
+        } catch {
+            setError("Invalid direct URL or server error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const removeTorrent = async (hash: string) => {
         if (!serverUrl) return;
         await fetch(`${serverUrl}/api/remove/${hash}`, { method: "DELETE" });
@@ -144,6 +208,46 @@ export function Dashboard() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
+    };
+
+    const DirectDownloadCard = ({ dl }: { dl: DirectDownload }) => {
+        const live = useDownloadProgress(dl.id);
+        const progress = live?.progress ?? dl.progress ?? 0;
+        const downloadedBytes = live?.downloadedBytes ?? dl.downloadedBytes ?? 0;
+        const totalBytes = live?.totalBytes ?? dl.totalBytes ?? 0;
+        const status = (live?.status ?? dl.status) as DirectDownload["status"];
+
+        return (
+            <Card>
+                <CardContent className="pt-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="font-medium truncate">{dl.filename}</div>
+                            <div className="text-xs text-muted-foreground truncate">{status}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {status === "completed" && (
+                                <Button
+                                    size="sm"
+                                    onClick={() => window.location.href = `/watch?directId=${dl.id}`}
+                                    className="gap-1.5"
+                                >
+                                    <Play className="size-4" fill="currentColor" />
+                                    Play
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{formatBytes(downloadedBytes)} / {formatBytes(totalBytes)}</span>
+                            <span>{progress.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={progress} />
+                    </div>
+                </CardContent>
+            </Card>
+        );
     };
 
     const deleteCachedFolder = async (infoHash: string) => {
@@ -177,11 +281,15 @@ export function Dashboard() {
     };
 
     // Group cached files by infoHash
-    const groupedCache = cachedFiles.reduce((acc, file) => {
-        if (!acc[file.infoHash]) {
-            acc[file.infoHash] = [];
+    const magnetCachedFiles = cachedFiles.filter((f) => f.type === 'magnet' && !!f.infoHash);
+    const directCachedFiles = cachedFiles.filter((f) => f.type === 'direct');
+
+    const groupedCache = magnetCachedFiles.reduce((acc, file) => {
+        const hash = file.infoHash as string;
+        if (!acc[hash]) {
+            acc[hash] = [];
         }
-        acc[file.infoHash].push(file);
+        acc[hash].push(file);
         return acc;
     }, {} as Record<string, CachedFile[]>);
 
@@ -201,28 +309,70 @@ export function Dashboard() {
 
                 <Card className="border-dashed border-2 transition-colors pt-0">
                     <CardContent className="pt-4">
-                        <form onSubmit={addMagnet} className="flex flex-col gap-3">
-                            <Input
-                                type="text"
-                                placeholder="Paste Magnet Link here..."
-                                className="h-12 text-base"
-                                value={magnet}
-                                onChange={(e) => setMagnet(e.target.value)}
-                            />
+                        <div className="flex gap-2 mb-3">
                             <Button
-                                type="submit"
-                                size="lg"
-                                disabled={loading || !magnet}
-                                className="w-full h-12 gap-2"
+                                type="button"
+                                variant={inputType === 'magnet' ? 'default' : 'outline'}
+                                onClick={() => setInputType('magnet')}
                             >
-                                {loading ? (
-                                    <div className="size-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                                ) : (
-                                    <Download className="size-5" />
-                                )}
-                                Add Torrent
+                                Magnet URL
                             </Button>
-                        </form>
+                            <Button
+                                type="button"
+                                variant={inputType === 'direct' ? 'default' : 'outline'}
+                                onClick={() => setInputType('direct')}
+                            >
+                                Direct Link
+                            </Button>
+                        </div>
+
+                        {inputType === 'magnet' ? (
+                            <form onSubmit={addMagnet} className="flex flex-col gap-3">
+                                <Input
+                                    type="text"
+                                    placeholder="Paste Magnet Link here..."
+                                    className="h-12 text-base"
+                                    value={magnet}
+                                    onChange={(e) => setMagnet(e.target.value)}
+                                />
+                                <Button
+                                    type="submit"
+                                    size="lg"
+                                    disabled={loading || !magnet}
+                                    className="w-full h-12 gap-2"
+                                >
+                                    {loading ? (
+                                        <div className="size-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                                    ) : (
+                                        <Download className="size-5" />
+                                    )}
+                                    Add Torrent
+                                </Button>
+                            </form>
+                        ) : (
+                            <form onSubmit={addDirectDownload} className="flex flex-col gap-3">
+                                <Input
+                                    type="text"
+                                    placeholder="Paste direct video URL here..."
+                                    className="h-12 text-base"
+                                    value={directUrl}
+                                    onChange={(e) => setDirectUrl(e.target.value)}
+                                />
+                                <Button
+                                    type="submit"
+                                    size="lg"
+                                    disabled={loading || !directUrl}
+                                    className="w-full h-12 gap-2"
+                                >
+                                    {loading ? (
+                                        <div className="size-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                                    ) : (
+                                        <Download className="size-5" />
+                                    )}
+                                    Download
+                                </Button>
+                            </form>
+                        )}
                         {error && (
                             <p className="text-destructive text-sm mt-3 flex items-center gap-2">
                                 <span className="size-1.5 bg-destructive rounded-full" />
@@ -434,6 +584,48 @@ export function Dashboard() {
                     <div className="space-y-4">
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-3">
+                                <div className="h-8 w-1 bg-blue-500 rounded-full" />
+                                <div>
+                                    <h2 className="text-xl font-semibold">Direct Downloads</h2>
+                                    <div className="flex gap-2 mt-1">
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            <FileVideo className="size-3" />
+                                            {directDownloads.length} items
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={fetchDirectDownloads}
+                                className="gap-2"
+                            >
+                                <RefreshCw className={cn("size-4", refreshingDirect ? "animate-spin" : "")} />
+                                Refresh
+                            </Button>
+                        </div>
+
+                        {directDownloads.length === 0 ? (
+                            <Empty>
+                                <EmptyMedia>
+                                    <FileVideo className="size-8" />
+                                </EmptyMedia>
+                                <EmptyTitle>No direct downloads</EmptyTitle>
+                                <EmptyDescription>Add a direct link above to download.</EmptyDescription>
+                            </Empty>
+                        ) : (
+                            <div className="grid gap-3">
+                                {directDownloads.map((dl) => (
+                                    <DirectDownloadCard key={dl.id} dl={dl} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
                                 <div className="h-8 w-1 bg-green-500 rounded-full" />
                                 <div>
                                     <h2 className="text-xl font-semibold">Cached Videos</h2>
@@ -549,7 +741,7 @@ export function Dashboard() {
                                                                             <Button
                                                                                 variant="ghost"
                                                                                 size="icon-sm"
-                                                                                onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex}`)}
+                                                                                onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex ?? 0}`)}
                                                                             >
                                                                                 <Copy className="size-4" />
                                                                             </Button>
@@ -558,7 +750,7 @@ export function Dashboard() {
                                                                     </Tooltip>
                                                                     <Button
                                                                         size="sm"
-                                                                        onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex}`}
+                                                                        onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex ?? 0}`}
                                                                         className="gap-1.5"
                                                                     >
                                                                         <Play className="size-4" fill="currentColor" />
@@ -573,7 +765,7 @@ export function Dashboard() {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon-sm"
-                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex}`)}
+                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex ?? 0}`)}
                                                                     >
                                                                         <Copy className="size-4" />
                                                                     </Button>
@@ -582,7 +774,7 @@ export function Dashboard() {
                                                             </Tooltip>
                                                             <Button
                                                                 size="sm"
-                                                                onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex}`}
+                                                                onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex ?? 0}`}
                                                                 className="gap-1.5"
                                                             >
                                                                 <Play className="size-4" fill="currentColor" />
@@ -592,6 +784,84 @@ export function Dashboard() {
                                                     </div>
                                                 ))}
                                             </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-1 bg-purple-500 rounded-full" />
+                                <div>
+                                    <h2 className="text-xl font-semibold">Direct Cached Files</h2>
+                                    <div className="flex gap-2 mt-1">
+                                        <Badge variant="secondary" className="gap-1.5">
+                                            <HardDrive className="size-3" />
+                                            {directCachedFiles.length} files
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {directCachedFiles.length === 0 ? (
+                            <Empty className="border rounded-2xl py-12 min-h-[160px]">
+                                <EmptyMedia variant="icon">
+                                    <FileVideo />
+                                </EmptyMedia>
+                                <EmptyTitle>No direct cached files</EmptyTitle>
+                                <EmptyDescription>Completed direct downloads will appear here.</EmptyDescription>
+                            </Empty>
+                        ) : (
+                            <div className="grid gap-3">
+                                {directCachedFiles.map((file, idx) => (
+                                    <Card key={`${file.path}-${idx}`}>
+                                        <CardContent className="pt-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-medium truncate">{file.name}</div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Badge variant="outline">{file.status || 'unknown'}</Badge>
+                                                        <span className="text-xs text-muted-foreground">{formatBytes(file.size || 0)}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {file.streamUrl && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    onClick={() => copyToClipboard(`${serverUrl}${file.streamUrl}`)}
+                                                                >
+                                                                    <Copy className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Copy Stream URL</TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Button
+                                                        size="sm"
+                                                        disabled={!file.canPlay || !file.downloadId}
+                                                        onClick={() => window.location.href = `/watch?directId=${file.downloadId}`}
+                                                        className="gap-1.5"
+                                                    >
+                                                        <Play className="size-4" fill="currentColor" />
+                                                        Play
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {typeof file.progress === 'number' && file.status === 'downloading' && (
+                                                <div className="mt-3 space-y-2">
+                                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                        <span>{(file.progress || 0).toFixed(1)}%</span>
+                                                    </div>
+                                                    <Progress value={file.progress || 0} />
+                                                </div>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 ))}

@@ -48,6 +48,9 @@ export default function VideoPlayer() {
     const [searchParams] = useSearchParams();
     const infoHash = searchParams.get('infoHash') || '';
     const fileIndex = parseInt(searchParams.get('fileIndex') || searchParams.get('file') || '0');
+    const directIdParam = searchParams.get('directId');
+    const directId = directIdParam ? parseInt(directIdParam, 10) : NaN;
+    const isDirectDownload = Number.isFinite(directId);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -173,6 +176,15 @@ export default function VideoPlayer() {
         const fetchData = async () => {
             if (!serverUrl) return;
             try {
+                if (isDirectDownload) {
+                    const res = await fetch(`${serverUrl}/api/direct/${directId}`);
+                    const data = await res.json();
+                    if (data?.filename) {
+                        setFileInfo({ name: data.filename, size: data.totalBytes || 0 });
+                    }
+                    return;
+                }
+
                 const statsRes = await fetch(`${serverUrl}/api/stats/${infoHash}`);
                 const statsData = await statsRes.json();
                 const file = statsData.files && statsData.files[Number(fileIndex)];
@@ -187,11 +199,11 @@ export default function VideoPlayer() {
             }
         };
         fetchData();
-    }, [infoHash, fileIndex, serverUrl]);
+    }, [infoHash, fileIndex, serverUrl, isDirectDownload, directId]);
 
     // SSE for stats
     useEffect(() => {
-        if (!infoHash || !serverUrl) return;
+        if (isDirectDownload || !infoHash || !serverUrl) return;
 
         const eventSource = new EventSource(`${serverUrl}/api/stats/${infoHash}/stream`);
 
@@ -221,7 +233,7 @@ export default function VideoPlayer() {
         return () => {
             eventSource.close();
         };
-    }, [infoHash, fileIndex, duration, serverUrl]);
+    }, [infoHash, fileIndex, duration, serverUrl, isDirectDownload]);
 
     const togglePlay = useCallback(() => {
         if (!videoRef.current) return;
@@ -237,8 +249,20 @@ export default function VideoPlayer() {
         }
     }, []);
 
+    const syncDurationFromVideo = useCallback(() => {
+        const video = videoRef.current;
+        if (!video) return;
+        const d = video.duration;
+        if (Number.isFinite(d) && d > 0) {
+            setDuration(d);
+        }
+    }, []);
+
     const handleSeek = useCallback((time: number) => {
-        const targetTime = Math.max(0, Math.min(time, duration));
+        const video = videoRef.current;
+        const videoDuration = video?.duration;
+        const effectiveDuration = (Number.isFinite(videoDuration) && (videoDuration as number) > 0) ? (videoDuration as number) : duration;
+        const targetTime = Math.max(0, Math.min(time, effectiveDuration));
         setCurrentTime(targetTime);
 
         if (videoRef.current && serverUrl) {
@@ -246,14 +270,20 @@ export default function VideoPlayer() {
                 // HLS: just set currentTime, HLS.js handles segment loading
                 videoRef.current.currentTime = targetTime;
             } else {
-                // Direct: new fMP4 stream from seek position
-                setSeekOffset(targetTime);
-                videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
-                videoRef.current.play();
-                setPlaying(true);
+                if (isDirectDownload) {
+                    videoRef.current.currentTime = targetTime;
+                    videoRef.current.play();
+                    setPlaying(true);
+                } else {
+                    // Direct: new fMP4 stream from seek position
+                    setSeekOffset(targetTime);
+                    videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
+                    videoRef.current.play();
+                    setPlaying(true);
+                }
             }
         }
-    }, [duration, streamMode, infoHash, fileIndex, serverUrl]);
+    }, [duration, streamMode, infoHash, fileIndex, serverUrl, isDirectDownload]);
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -329,6 +359,11 @@ export default function VideoPlayer() {
             hlsRef.current = null;
         }
 
+        if (isDirectDownload) {
+            video.src = `${serverUrl}/stream/direct/${directId}`;
+            return;
+        }
+
         if (streamMode === 'hls') {
             const hlsUrl = `${serverUrl}/hls/${infoHash}/${fileIndex}/playlist.m3u8`;
 
@@ -373,7 +408,7 @@ export default function VideoPlayer() {
                 hlsRef.current = null;
             }
         };
-    }, [streamMode, serverUrl, infoHash, fileIndex]);
+    }, [streamMode, serverUrl, infoHash, fileIndex, isDirectDownload, directId]);
 
     // 2. Time Update & Subtitle Rendering Logic
     useEffect(() => {
@@ -383,7 +418,7 @@ export default function VideoPlayer() {
         const onTimeUpdate = () => {
             if (isDraggingRef.current) return;
             // HLS: currentTime is absolute. Direct: seekOffset + currentTime
-            const absTime = streamMode === 'hls' ? video.currentTime : seekOffset + video.currentTime;
+            const absTime = isDirectDownload ? video.currentTime : (streamMode === 'hls' ? video.currentTime : seekOffset + video.currentTime);
             setCurrentTime(absTime);
 
             if (subtitleCues.length > 0) {
@@ -408,7 +443,7 @@ export default function VideoPlayer() {
         return () => {
             video.removeEventListener('timeupdate', onTimeUpdate);
         };
-    }, [streamMode, seekOffset, subtitleCues, subOffset]);
+    }, [streamMode, seekOffset, subtitleCues, subOffset, isDirectDownload]);
 
     const handleContainerClick = (e: React.MouseEvent) => {
         const target = e.target as HTMLElement;
@@ -429,6 +464,18 @@ export default function VideoPlayer() {
         setHoverPosition(percentage * 100);
     };
 
+    // Reset timeline state when switching sources (torrent <-> direct, or different file)
+    useEffect(() => {
+        setCurrentTime(0);
+        setDuration(0);
+        setSeekOffset(0);
+        setBufferedRanges([]);
+        setHlsBufferedRanges([]);
+        setHoverTime(null);
+        setHoverPosition(0);
+        setLoading(true);
+    }, [infoHash, fileIndex, isDirectDownload, directId]);
+
     return (
         <div
             ref={containerRef}
@@ -446,6 +493,8 @@ export default function VideoPlayer() {
                 crossOrigin="anonymous"
                 onPlay={() => { setPlaying(true); setLoading(false); }}
                 onPause={() => setPlaying(false)}
+                onLoadedMetadata={syncDurationFromVideo}
+                onDurationChange={syncDurationFromVideo}
                 onWaiting={() => setLoading(true)}
                 onPlaying={() => setLoading(false)}
                 onEnded={() => setPlaying(false)}
@@ -658,37 +707,41 @@ export default function VideoPlayer() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <SubtitlePopover
-                            containerRef={containerRef}
-                            subtitleCues={subtitleCues}
-                            setSubtitleCues={setSubtitleCues}
-                            embeddedSubs={embeddedSubs}
-                            selectedSubId={selectedSubId}
-                            setSelectedSubId={setSelectedSubId}
-                            setCurrentSubLink={setCurrentSubLink}
-                            infoHash={infoHash}
-                            fileIndex={fileIndex}
-                            serverUrl={serverUrl}
-                            setSubOffset={setSubOffset}
-                            initialQuery={fileInfo?.name ? fileInfo.name.replace(/\./g, " ") : ""}
-                        />
+                        {!isDirectDownload && (
+                            <>
+                                <SubtitlePopover
+                                    containerRef={containerRef}
+                                    subtitleCues={subtitleCues}
+                                    setSubtitleCues={setSubtitleCues}
+                                    embeddedSubs={embeddedSubs}
+                                    selectedSubId={selectedSubId}
+                                    setSelectedSubId={setSelectedSubId}
+                                    setCurrentSubLink={setCurrentSubLink}
+                                    infoHash={infoHash}
+                                    fileIndex={fileIndex}
+                                    serverUrl={serverUrl}
+                                    setSubOffset={setSubOffset}
+                                    initialQuery={fileInfo?.name ? fileInfo.name.replace(/\./g, " ") : ""}
+                                />
 
-                        <SettingsPopover
-                            containerRef={containerRef}
-                            streamMode={streamMode}
-                            setStreamMode={setStreamMode}
-                            subOffset={subOffset}
-                            setSubOffset={setSubOffset}
-                            subSize={subSize}
-                            setSubSize={setSubSize}
-                            subPos={subPos}
-                            setSubPos={setSubPos}
-                            currentSubLink={currentSubLink}
-                            infoHash={infoHash}
-                            fileIndex={fileIndex}
-                            serverUrl={serverUrl}
-                            currentTime={currentTime}
-                        />
+                                <SettingsPopover
+                                    containerRef={containerRef}
+                                    streamMode={streamMode}
+                                    setStreamMode={setStreamMode}
+                                    subOffset={subOffset}
+                                    setSubOffset={setSubOffset}
+                                    subSize={subSize}
+                                    setSubSize={setSubSize}
+                                    subPos={subPos}
+                                    setSubPos={setSubPos}
+                                    currentSubLink={currentSubLink}
+                                    infoHash={infoHash}
+                                    fileIndex={fileIndex}
+                                    serverUrl={serverUrl}
+                                    currentTime={currentTime}
+                                />
+                            </>
+                        )}
 
                         <button onClick={toggleFullscreen} className="text-white/70 hover:text-white pointer-events-auto">
                             {fullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
