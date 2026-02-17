@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Play, Trash2, Download, Copy, Film, Zap, Users, HardDrive, RefreshCw, Folder, FileVideo } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
+import { Play, Trash2, Download, Copy, Film, HardDrive, RefreshCw, Folder, FileVideo } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,68 +20,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
-import { useDownloadProgress } from "@/hooks/useDownloadProgress";
-
-type TorrentFile = {
-    name: string;
-    length: number;
-    progress: number;
-    piecesReady: number;
-    piecesTotal: number;
-};
-
-type Torrent = {
-    infoHash: string;
-    name: string;
-    magnetUri: string;
-    totalLength: number;
-    downloaded: number;
-    downloadSpeed: number;
-    progress: number;
-    peers: number;
-    files: TorrentFile[];
-};
-
-type CachedFile = {
-    name: string;
-    path: string;
-    size: number;
-    type: 'magnet' | 'direct';
-    infoHash?: string;
-    fileIndex?: number;
-    downloadId?: number;
-    progress?: number;
-    status?: string;
-    streamUrl: string;
-    canPlay: boolean;
-};
-
-type CacheStats = {
-    totalSize: number;
-    fileCount: number;
-    cacheDir: string;
-};
-
-type DirectDownload = {
-    id: number;
-    url: string;
-    filename: string;
-    status: 'downloading' | 'completed' | 'failed' | 'missing' | 'orphan' | 'on_demand';
-    progress: number;
-    downloadedBytes: number;
-    totalBytes: number;
-    filePath: string;
-    addedAt: string;
-    completedAt?: string;
-};
-
-const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-};
+import DirectDownloadCard from "./DirectDownloadCard";
+import TorrentCard from "./TorrentCard";
+import CachedGroupCard from "./CachedGroupCard";
+import { formatBytes } from "./utils";
+import type { Torrent, CachedFile, CacheStats, DirectDownload } from "./types";
 
 export function Dashboard() {
     const { serverUrl } = useServer();
@@ -208,46 +151,6 @@ export function Dashboard() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-    };
-
-    const DirectDownloadCard = ({ dl }: { dl: DirectDownload }) => {
-        const live = useDownloadProgress(dl.id);
-        const progress = live?.progress ?? dl.progress ?? 0;
-        const downloadedBytes = live?.downloadedBytes ?? dl.downloadedBytes ?? 0;
-        const totalBytes = live?.totalBytes ?? dl.totalBytes ?? 0;
-        const status = (live?.status ?? dl.status) as DirectDownload["status"];
-
-        return (
-            <Card>
-                <CardContent className="pt-4">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <div className="font-medium truncate">{dl.filename}</div>
-                            <div className="text-xs text-muted-foreground truncate">{status}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {(status === "completed" || status === "on_demand") && (
-                                <Button
-                                    size="sm"
-                                    onClick={() => window.location.href = `/watch?directId=${dl.id}`}
-                                    className="gap-1.5"
-                                >
-                                    <Play className="size-4" fill="currentColor" />
-                                    Play
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{formatBytes(downloadedBytes)} / {formatBytes(totalBytes)}</span>
-                            <span>{progress.toFixed(1)}%</span>
-                        </div>
-                        <Progress value={progress} />
-                    </div>
-                </CardContent>
-            </Card>
-        );
     };
 
     const deleteCachedFolder = async (infoHash: string) => {
@@ -442,140 +345,13 @@ export function Dashboard() {
                         ) : (
                             <div className="grid gap-4">
                                 {torrents.map((t) => (
-                                    <Card key={t.infoHash} className="overflow-hidden group transition-all">
-                                        <CardHeader className="pb-4">
-                                            <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                                                <div className="min-w-0 w-full md:flex-1 space-y-2">
-                                                    <CardTitle className="text-lg leading-tight break-words" title={t.name}>
-                                                        {t.name || "Fetching metadata..."}
-                                                    </CardTitle>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <Badge variant="outline" className="gap-1.5 font-mono text-xs">
-                                                            <HardDrive className="size-3" />
-                                                            {formatBytes(t.totalLength)}
-                                                        </Badge>
-                                                        <Badge variant="outline" className="gap-1.5 font-mono text-xs text-green-600 border-green-600/30">
-                                                            <Zap className="size-3" />
-                                                            {formatBytes(t.downloadSpeed)}/s
-                                                        </Badge>
-                                                        <Badge variant="outline" className="gap-1.5 font-mono text-xs text-blue-600 border-blue-600/30">
-                                                            <Users className="size-3" />
-                                                            {t.peers} peers
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                                <CardAction className="flex items-center justify-between w-full md:w-auto gap-4 md:mt-0">
-                                                    <div className="text-right">
-                                                        <div className="text-2xl font-bold tabular-nums">
-                                                            {t.progress.toFixed(1)}%
-                                                        </div>
-                                                        <CardDescription>completed</CardDescription>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="text-muted-foreground hover:text-primary"
-                                                                    onClick={() => copyToClipboard(t.magnetUri)}
-                                                                >
-                                                                    <Copy className="size-4" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>Copy Magnet Link</TooltipContent>
-                                                        </Tooltip>
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="text-destructive/60 hover:text-destructive hover:bg-destructive/10">
-                                                                    <Trash2 className="size-4" />
-                                                                </Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>Remove Torrent?</AlertDialogTitle>
-                                                                    <AlertDialogDescription>
-                                                                        This will stop streaming and remove this torrent from the list.
-                                                                    </AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => removeTorrent(t.infoHash)}>
-                                                                        Remove
-                                                                    </AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
-                                                    </div>
-                                                </CardAction>
-                                            </div>
-                                            <Progress value={t.progress} className="h-1.5 mt-2" />
-                                        </CardHeader>
-
-                                        <CardContent className="pt-0">
-                                            <div className="space-y-1">
-                                                {t.files.map((f, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg group/file transition-colors"
-                                                    >
-                                                        <div className="flex-1 min-w-0 space-y-2 md:space-y-1">
-                                                            <div className="text-sm font-medium truncate">{f.name}</div>
-                                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                                <span>{formatBytes(f.length)}</span>
-                                                                <span className="text-muted-foreground/50">•</span>
-                                                                <span className="tabular-nums">{f.progress.toFixed(1)}% ready</span>
-                                                            </div>
-                                                            <div className="flex gap-2 md:hidden pt-1 justify-end">
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            onClick={() => copyToClipboard(`${serverUrl}/stream/${t.infoHash}/${i}`)}
-                                                                        >
-                                                                            <Copy className="size-4" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>Copy Stream URL</TooltipContent>
-                                                                </Tooltip>
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={() => window.location.href = `/watch?infoHash=${t.infoHash}&fileIndex=${i}`}
-                                                                    className="gap-1.5"
-                                                                >
-                                                                    <Play className="size-4" fill="currentColor" />
-                                                                    Play
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="hidden md:flex gap-2">
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon-sm"
-                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${t.infoHash}/${i}`)}
-                                                                    >
-                                                                        <Copy className="size-4" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>Copy Stream URL</TooltipContent>
-                                                            </Tooltip>
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => window.location.href = `/watch?infoHash=${t.infoHash}&fileIndex=${i}`}
-                                                                className="gap-1.5"
-                                                            >
-                                                                <Play className="size-4" fill="currentColor" />
-                                                                Play
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                    <TorrentCard
+                                        key={t.infoHash}
+                                        torrent={t}
+                                        serverUrl={serverUrl}
+                                        onCopy={copyToClipboard}
+                                        onRemove={removeTorrent}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -633,7 +409,7 @@ export function Dashboard() {
                         ) : (
                             <div className="grid gap-3">
                                 {directDownloads.map((dl) => (
-                                    <DirectDownloadCard key={dl.id} dl={dl} />
+                                    <DirectDownloadCard key={dl.id} download={dl} />
                                 ))}
                             </div>
                         )}
@@ -705,103 +481,14 @@ export function Dashboard() {
                         ) : (
                             <div className="grid gap-4">
                                 {Object.entries(groupedCache).map(([infoHash, files]) => (
-                                    <Card key={infoHash} className="overflow-hidden">
-                                        <CardHeader className="pb-3">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="min-w-0 flex-1 space-y-1">
-                                                    <CardTitle className="text-base font-mono truncate" title={infoHash}>
-                                                        {infoHash.substring(0, 16)}...
-                                                    </CardTitle>
-                                                    <CardDescription>
-                                                        {files.length} video{files.length !== 1 ? 's' : ''} • {formatBytes(files.reduce((sum, f) => sum + f.size, 0))}
-                                                    </CardDescription>
-                                                </div>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="text-destructive/60 hover:text-destructive hover:bg-destructive/10">
-                                                            <Trash2 className="size-4" />
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Delete Cached Files?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                This will permanently delete all cached files for this torrent. This action cannot be undone.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => deleteCachedFolder(infoHash)}>
-                                                                Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="pt-0">
-                                            <div className="space-y-1">
-                                                {files.map((file, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-lg transition-colors"
-                                                    >
-                                                        <div className="flex items-center gap-3 min-w-0 flex-1 md:items-start">
-                                                            <FileVideo className="size-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                                            <div className="min-w-0 flex-1 space-y-2 md:space-y-0">
-                                                                <div className="text-sm font-medium truncate">{file.name}</div>
-                                                                <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
-                                                                <div className="flex gap-2 md:hidden pt-1 justify-end">
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon-sm"
-                                                                                onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex ?? 0}`)}
-                                                                            >
-                                                                                <Copy className="size-4" />
-                                                                            </Button>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>Copy Stream URL</TooltipContent>
-                                                                    </Tooltip>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex ?? 0}`}
-                                                                        className="gap-1.5"
-                                                                    >
-                                                                        <Play className="size-4" fill="currentColor" />
-                                                                        Play
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="hidden md:flex gap-2">
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon-sm"
-                                                                        onClick={() => copyToClipboard(`${serverUrl}/stream/${infoHash}/${file.fileIndex ?? 0}`)}
-                                                                    >
-                                                                        <Copy className="size-4" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>Copy Stream URL</TooltipContent>
-                                                            </Tooltip>
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => window.location.href = `/watch?infoHash=${infoHash}&fileIndex=${file.fileIndex ?? 0}`}
-                                                                className="gap-1.5"
-                                                            >
-                                                                <Play className="size-4" fill="currentColor" />
-                                                                Play
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                    <CachedGroupCard
+                                        key={infoHash}
+                                        infoHash={infoHash}
+                                        files={files}
+                                        onDelete={deleteCachedFolder}
+                                        onCopy={copyToClipboard}
+                                        serverUrl={serverUrl}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -845,14 +532,15 @@ export function Dashboard() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    {file.streamUrl && (
+                                                    {file.streamUrl && serverUrl && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon-sm"
-                                                                    onClick={() => copyToClipboard(`${serverUrl}${file.streamUrl}`)}
-                                                                >
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            onClick={() => copyToClipboard(`${serverUrl}${file.streamUrl}`)}
+                                                            disabled={!serverUrl}
+                                                        >
                                                                     <Copy className="size-4" />
                                                                 </Button>
                                                             </TooltipTrigger>

@@ -1,32 +1,11 @@
-import { createBrowserRouter, Outlet, Navigate } from 'react-router-dom';
-import Dashboard from '../pages/Dashboard';
-import VideoPlayer from '../pages/VideoPlayer';
-import Search from '../pages/Search';
-import Browse from '../pages/Browse';
-import MediaDetail from '../pages/MediaDetail';
-import ServerLogin from '../pages/ServerLogin';
-import AppLayout from '../components/AppLayout';
-import { useServer } from '../contexts/ServerContext';
-
-// Protected route wrapper
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-    const { serverUrl } = useServer();
-
-    if (!serverUrl) {
-        return <Navigate to="/login" replace />;
-    }
-
-    return <>{children}</>;
-}
-
-// Layout wrapper component
-function LayoutWrapper() {
-    return (
-        <AppLayout>
-            <Outlet />
-        </AppLayout>
-    );
-}
+import { createBrowserRouter } from 'react-router-dom';
+import Dashboard from '../pages/Dashboard/Page';
+import VideoPlayer from '../pages/VideoPlayer/Page';
+import Search from '../pages/Search/Page';
+import Browse from '../pages/Browser/Page';
+import MediaDetail from '../pages/MediaDetail/Page';
+import ServerLogin from '../pages/ServerLogin/Page';
+import { ProtectedRoute, LayoutWrapper } from './RouteWrappers';
 
 export const router = createBrowserRouter([
     {

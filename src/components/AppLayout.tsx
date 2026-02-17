@@ -207,14 +207,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const fullWidthPaths = ['/movie', '/series', '/tv'];
+    const isMediaDetailRoute = fullWidthPaths.some((prefix) => location.pathname.startsWith(prefix));
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
             <Sidebar />
             <main className={cn(
                 "max-h-dvh overflow-y-auto",
-                isMobile ? "pb-20 px-4 pt-8" : "pl-16 p-8"
+                isMediaDetailRoute
+                    ? (isMobile ? "pb-20 px-0 pt-0" : "pt-0 pb-0 pl-16")
+                    : (isMobile ? "pb-20 px-0 pt-8" : "pt-8 pb-0 pl-16")
             )}>
-                <div className="max-w-6xl mx-auto">
+                <div className={cn(
+                    "w-full",
+                    isMediaDetailRoute ? "mx-auto px-0" : "max-w-6xl mx-auto px-4 lg:px-0"
+                )}>
                     {children}
                 </div>
             </main>

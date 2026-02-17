@@ -2,11 +2,11 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Hls from "hls.js";
 import { useSearchParams } from "react-router-dom";
 import { Play, Pause, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, RotateCcw, RotateCw } from "lucide-react";
-import { cn } from "../lib/utils";
-import { Toaster } from "../components/ui/sonner";
-import SubtitlePopover from "../components/SubtitlePopover";
-import SettingsPopover from "../components/SettingsPopover";
-import { useServer } from "../contexts/ServerContext";
+import { cn } from "../../lib/utils";
+import { Toaster } from "../../components/ui/sonner";
+import SubtitlePopover from "./SubtitlePopover";
+import SettingsPopover from "./SettingsPopover";
+import { useServer } from "../../contexts/ServerContext";
 
 // Helper to format seconds to HH:MM:SS
 const formatTime = (seconds: number) => {
