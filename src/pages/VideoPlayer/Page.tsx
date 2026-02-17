@@ -285,7 +285,8 @@ export default function VideoPlayer() {
                     } else {
                         // Direct: new fMP4 stream from seek position
                         seekOffsetRef.current = targetTime;
-                        videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${targetTime}`;
+                        const dParam = effectiveDuration > 0 ? `&d=${encodeURIComponent(String(effectiveDuration))}` : "";
+                        videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${encodeURIComponent(String(targetTime))}${dParam}`;
                         videoRef.current.play();
                         setPlaying(true);
                 }
