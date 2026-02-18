@@ -5,6 +5,8 @@ import Search from '../pages/Search/Page';
 import Browse from '../pages/Browser/Page';
 import MediaDetail from '../pages/MediaDetail/Page';
 import ServerLogin from '../pages/ServerLogin/Page';
+import CustomProviderPage from '../pages/CustomProvider/Page';
+import FullHtmlPreviewPage from '../pages/CustomProvider/FullHtmlPreview';
 import { ProtectedRoute, LayoutWrapper } from './RouteWrappers';
 
 export const router = createBrowserRouter([
@@ -17,6 +19,14 @@ export const router = createBrowserRouter([
         element: (
             <ProtectedRoute>
                 <VideoPlayer />
+            </ProtectedRoute>
+        ),
+    },
+    {
+        path: '/custom-provider/preview/:encodedHtml',
+        element: (
+            <ProtectedRoute>
+                <FullHtmlPreviewPage />
             </ProtectedRoute>
         ),
     },
@@ -39,6 +49,10 @@ export const router = createBrowserRouter([
             {
                 path: 'search',
                 element: <Search />,
+            },
+            {
+                path: 'custom-provider',
+                element: <CustomProviderPage />,
             },
             {
                 path: 'browse',

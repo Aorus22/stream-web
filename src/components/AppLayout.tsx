@@ -3,6 +3,7 @@ import {
     Compass,
     Search,
     Download,
+    Code2,
     LogOut,
     Menu,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const navItems: NavItem[] = [
     { icon: Compass, label: "Discover", href: "/" },
     { icon: Search, label: "Torrent Search", href: "/search" },
     { icon: Download, label: "My Torrents", href: "/dashboard" },
+    { icon: Code2, label: "Custom Provider", href: "/custom-provider" },
 ];
 
 // Logo SVG Component
