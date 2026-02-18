@@ -5,7 +5,8 @@ import Search from '../pages/Search/Page';
 import Browse from '../pages/Browser/Page';
 import MediaDetail from '../pages/MediaDetail/Page';
 import ServerLogin from '../pages/ServerLogin/Page';
-import CustomProviderPage from '../pages/CustomProvider/Page';
+import { CustomProviderListPage } from '../pages/CustomProvider/ListPage';
+import { CustomProviderEditorPage } from '../pages/CustomProvider/EditorPage';
 import FullHtmlPreviewPage from '../pages/CustomProvider/FullHtmlPreview';
 import { ProtectedRoute, LayoutWrapper } from './RouteWrappers';
 
@@ -52,7 +53,15 @@ export const router = createBrowserRouter([
             },
             {
                 path: 'custom-provider',
-                element: <CustomProviderPage />,
+                element: <CustomProviderListPage />,
+            },
+            {
+                path: 'custom-provider/new',
+                element: <CustomProviderEditorPage />,
+            },
+            {
+                path: 'custom-provider/edit/:id',
+                element: <CustomProviderEditorPage />,
             },
             {
                 path: 'browse',
