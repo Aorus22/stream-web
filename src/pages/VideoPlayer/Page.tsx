@@ -577,7 +577,7 @@ export default function VideoPlayer() {
 
             {loading && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500"></div>
+                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
                 </div>
             )}
 
@@ -648,7 +648,7 @@ export default function VideoPlayer() {
                         ))}
 
                         <div
-                            className="absolute h-full bg-purple-600 rounded-full shadow-[0_0_10px_rgba(147,51,234,0.5)] z-10"
+                            className="absolute h-full bg-primary rounded-full shadow-[0_0_10px_currentColor] text-primary/50 z-10"
                             style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                         />
                         <div
@@ -693,7 +693,7 @@ export default function VideoPlayer() {
                     <div className="flex items-center gap-6">
                         <button
                             onClick={togglePlay}
-                            className="text-white hover:text-purple-400 transition-transform hover:scale-110 p-3 bg-white/5 rounded-full backdrop-blur-sm"
+                            className="text-white hover:text-primary transition-transform hover:scale-110 p-3 bg-white/5 rounded-full backdrop-blur-sm"
                         >
                             {playing ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
                         </button>

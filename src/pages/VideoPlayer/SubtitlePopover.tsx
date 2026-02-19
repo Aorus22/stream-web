@@ -138,7 +138,7 @@ export default function SubtitlePopover({
         <Popover modal={true} open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
                 <button
-                    className={cn("transition-transform hover:scale-110", subtitleCues.length > 0 ? "text-purple-400" : "text-white/70 hover:text-white")}
+                    className={cn("transition-transform hover:scale-110", subtitleCues.length > 0 ? "text-primary/80" : "text-white/70 hover:text-white")}
                     title="Subtitles"
                 >
                     <Captions size={24} />
@@ -157,7 +157,7 @@ export default function SubtitlePopover({
                         <div className="flex gap-2">
                             <input
                                 ref={inputRef}
-                                className="bg-white/10 border-none rounded px-2 py-1 flex-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                className="bg-white/10 border-none rounded px-2 py-1 flex-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary"
                                 value={searchInput}
                                 onChange={e => setSearchInput(e.target.value)}
                                 placeholder="Search..."
@@ -179,13 +179,13 @@ export default function SubtitlePopover({
                                         <div className="flex flex-col gap-1">
                                             <button
                                                 onClick={() => { setSubLang('eng'); setShowLangPopover(false); }}
-                                                className={cn("flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-white/10", subLang === 'eng' && "bg-purple-600")}
+                                                className={cn("flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-white/10", subLang === 'eng' && "bg-primary text-primary-foreground")}
                                             >
                                                 🇬🇧 English
                                             </button>
                                             <button
                                                 onClick={() => { setSubLang('ind'); setShowLangPopover(false); }}
-                                                className={cn("flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-white/10", subLang === 'ind' && "bg-purple-600")}
+                                                className={cn("flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-white/10", subLang === 'ind' && "bg-primary text-primary-foreground")}
                                             >
                                                 🇮🇩 Indonesia
                                             </button>
@@ -194,7 +194,7 @@ export default function SubtitlePopover({
                                 </Popover>
                             </div>
 
-                            <button onClick={searchSubtitles} className="p-1 bg-purple-600 rounded hover:bg-purple-500">
+                            <button onClick={searchSubtitles} className="p-1 bg-primary rounded hover:bg-primary/80 text-primary-foreground">
                                 <Search size={16} />
                             </button>
                         </div>
@@ -211,7 +211,7 @@ export default function SubtitlePopover({
                                         disabled={isLoadingSubtitle}
                                         className={cn(
                                             "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2 mb-1",
-                                            selectedSubId === `embedded-${s.index}` ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90",
+                                            selectedSubId === `embedded-${s.index}` ? "bg-primary text-primary-foreground" : "hover:bg-white/10 text-white/90",
                                             isLoadingSubtitle && "opacity-50 cursor-not-allowed"
                                         )}
                                     >
@@ -241,7 +241,7 @@ export default function SubtitlePopover({
                                         onClick={() => selectSubtitle(s.SubDownloadLink, s.IDSubtitleFile)}
                                         className={cn(
                                             "block w-full text-left text-xs p-2 rounded truncate flex items-center justify-between gap-2 mb-1",
-                                            selectedSubId === s.IDSubtitleFile ? "bg-purple-600 text-white" : "hover:bg-white/10 text-white/90"
+                                            selectedSubId === s.IDSubtitleFile ? "bg-primary text-primary-foreground" : "hover:bg-white/10 text-white/90"
                                         )}
                                     >
                                         <span className="truncate flex-1" title={s.SubFileName}>{s.SubFileName}</span>

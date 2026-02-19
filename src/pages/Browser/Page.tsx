@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { FormEvent } from "react";
 import { TrendingUp, Star } from "lucide-react";
 import { Tabs } from "@/components/ui/tabs";
@@ -13,7 +13,7 @@ export function Browse() {
     const { serverUrl } = useServer();
     const [activeTab, setActiveTab] = useState<"movies" | "series">("movies");
     const [category, setCategory] = useState<Category>("popular");
-    const [selectedGenre, setSelectedGenre] = useState<string>("Animation");
+    const [selectedGenre, setSelectedGenre] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -149,7 +149,7 @@ export function Browse() {
         setHasSearched(false);
     };
 
-    const movieRows = [
+    const movieRows = useMemo(() => [
         {
             title: "Popular Movies",
             items: popularMovies,
@@ -162,9 +162,9 @@ export function Browse() {
             loading: loadingMovies,
             icon: Star,
         },
-    ];
+    ], [popularMovies, topRatedMovies, loadingMovies]);
 
-    const seriesRows = [
+    const seriesRows = useMemo(() => [
         {
             title: "Popular TV Series",
             items: popularSeries,
@@ -177,7 +177,7 @@ export function Browse() {
             loading: loadingSeries,
             icon: Star,
         },
-    ];
+    ], [popularSeries, topRatedSeries, loadingSeries]);
 
     const showFilters = !(searchQuery || hasSearched);
     const handleTabChange = (value: string) => {
@@ -214,33 +214,37 @@ export function Browse() {
                         clearSearch={clearSearch}
                     />
 
-                    <BrowseTabPanel
-                        value="movies"
-                        searchQuery={searchQuery}
-                        hasSearched={hasSearched}
-                        isSearching={isSearching}
-                        searchResults={searchResults}
-                        categoryItems={categoryItems}
-                        categoryLoading={categoryLoading}
-                        categorySkip={categorySkip}
-                        setCategorySkip={setCategorySkip}
-                        hasMore={hasMore}
-                        rows={movieRows}
-                    />
+                    {activeTab === "movies" && (
+                        <BrowseTabPanel
+                            value="movies"
+                            searchQuery={searchQuery}
+                            hasSearched={hasSearched}
+                            isSearching={isSearching}
+                            searchResults={searchResults}
+                            categoryItems={categoryItems}
+                            categoryLoading={categoryLoading}
+                            categorySkip={categorySkip}
+                            setCategorySkip={setCategorySkip}
+                            hasMore={hasMore}
+                            rows={movieRows}
+                        />
+                    )}
 
-                    <BrowseTabPanel
-                        value="series"
-                        searchQuery={searchQuery}
-                        hasSearched={hasSearched}
-                        isSearching={isSearching}
-                        searchResults={searchResults}
-                        categoryItems={categoryItems}
-                        categoryLoading={categoryLoading}
-                        categorySkip={categorySkip}
-                        setCategorySkip={setCategorySkip}
-                        hasMore={hasMore}
-                        rows={seriesRows}
-                    />
+                    {activeTab === "series" && (
+                        <BrowseTabPanel
+                            value="series"
+                            searchQuery={searchQuery}
+                            hasSearched={hasSearched}
+                            isSearching={isSearching}
+                            searchResults={searchResults}
+                            categoryItems={categoryItems}
+                            categoryLoading={categoryLoading}
+                            categorySkip={categorySkip}
+                            setCategorySkip={setCategorySkip}
+                            hasMore={hasMore}
+                            rows={seriesRows}
+                        />
+                    )}
                 </Tabs>
             </main>
         </div>

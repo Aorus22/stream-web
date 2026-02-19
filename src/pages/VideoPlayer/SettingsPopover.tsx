@@ -79,7 +79,7 @@ export default function SettingsPopover({
                                 className={cn(
                                     "flex-1 px-3 py-2 text-xs font-medium transition-colors",
                                     streamMode === 'direct'
-                                        ? "bg-purple-600 text-white"
+                                        ? "bg-primary text-primary-foreground"
                                         : "bg-white/5 text-white/60 hover:bg-white/10"
                                 )}
                             >
@@ -90,7 +90,7 @@ export default function SettingsPopover({
                                 className={cn(
                                     "flex-1 px-3 py-2 text-xs font-medium transition-colors",
                                     streamMode === 'hls'
-                                        ? "bg-purple-600 text-white"
+                                        ? "bg-primary text-primary-foreground"
                                         : "bg-white/5 text-white/60 hover:bg-white/10"
                                 )}
                             >
@@ -116,7 +116,7 @@ export default function SettingsPopover({
                                     disabled={!currentSubLink || isAutoSyncing}
                                     className={cn(
                                         "px-2 py-1 rounded text-xs transition-colors flex items-center gap-1",
-                                        isAutoSyncing ? "bg-purple-500/30 text-purple-300" : "bg-purple-600 text-white hover:bg-purple-500"
+                                        isAutoSyncing ? "bg-primary/30 text-primary-foreground/70" : "bg-primary text-primary-foreground hover:bg-primary/90"
                                     )}
                                     title="Auto Sync with Audio"
                                 >
@@ -134,7 +134,7 @@ export default function SettingsPopover({
                             <input
                                 type="range" min="50" max="200" step="10"
                                 value={subSize} onChange={e => setSubSize(Number(e.target.value))}
-                                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
                             />
                         </div>
 
@@ -147,7 +147,7 @@ export default function SettingsPopover({
                                 <input
                                     type="range" min="-100" max="100" step="1"
                                     value={subPos} onChange={e => setSubPos(Number(e.target.value))}
-                                    className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500 z-10 relative"
+                                    className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary z-10 relative"
                                 />
                             </div>
                         </div>

@@ -59,7 +59,7 @@ export default function TabFilters({
                     </Button>
 
                     <Select
-                        value={selectedGenre}
+                        value={category === "genre" ? selectedGenre : ""}
                         onValueChange={(value) => {
                             setSelectedGenre(value);
                             setCategory("genre");
@@ -71,7 +71,7 @@ export default function TabFilters({
                             category === "genre" && "ring-2 ring-primary"
                         )}>
                             <Filter className="size-4 mr-1" />
-                            <SelectValue placeholder="Genre" />
+                            <SelectValue placeholder="Choose Genre" />
                         </SelectTrigger>
                         <SelectContent>
                             {GENRES.map((genre) => (

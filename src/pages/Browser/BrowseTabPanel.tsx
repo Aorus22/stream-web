@@ -1,3 +1,4 @@
+import { memo, useEffect } from "react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Search as SearchIcon } from "lucide-react";
 import { MediaGrid, MediaRow } from "./MediaComponents";
@@ -24,7 +25,7 @@ type BrowseTabPanelProps = {
     }[];
 };
 
-export default function BrowseTabPanel({
+const BrowseTabPanel = memo(function BrowseTabPanel({
     value,
     searchQuery,
     hasSearched,
@@ -37,6 +38,15 @@ export default function BrowseTabPanel({
     hasMore,
     rows
 }: BrowseTabPanelProps) {
+    useEffect(() => {
+        if (categorySkip > 0) {
+            const scrollContainer = document.getElementById('main-scroll-container');
+            if (scrollContainer) {
+                scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+    }, [categorySkip]);
+
     return (
         <TabsContent value={value} className="space-y-6">
             {(searchQuery || hasSearched) ? (
@@ -77,4 +87,6 @@ export default function BrowseTabPanel({
             )}
         </TabsContent>
     );
-}
+});
+
+export default BrowseTabPanel;

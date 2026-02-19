@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import {
     Compass,
     Search,
@@ -34,12 +35,12 @@ function AppLogo({ className }: { className?: string }) {
             <svg viewBox="0 0 512 512" className="w-full h-full">
                 <defs>
                     <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#7C3AED" />
-                        <stop offset="100%" stopColor="#6D28D9" />
+                        <stop offset="0%" stopColor="oklch(0.60 0.12 190)" />
+                        <stop offset="100%" stopColor="oklch(0.40 0.08 200)" />
                     </linearGradient>
                     <linearGradient id="playGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
-                        <stop offset="100%" stopColor="#E0E7FF" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#E0F2F1" stopOpacity="0.95" />
                     </linearGradient>
                 </defs>
                 <rect width="512" height="512" rx="120" fill="url(#logoGradient)" />
@@ -55,7 +56,7 @@ function AppLogo({ className }: { className?: string }) {
 
 export function Sidebar() {
     const location = useLocation();
-    const { setServerUrl } = useServer();
+    const { serverUrl, setServerUrl } = useServer();
     const navigate = useNavigate();
     const isMobile = useIsMobile();
 
@@ -98,18 +99,26 @@ export function Sidebar() {
                                     <Menu className="size-5" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-48">
-                                <div className="flex flex-col gap-2">
+                            <PopoverContent align="end" className="w-56 p-2">
+                                <div className="flex flex-col gap-1">
+                                    {serverUrl && (
+                                        <div className="flex items-center gap-2 px-2 py-1.5 mb-1 bg-muted/40 rounded-md border border-border/50">
+                                            <div className="size-1.5 rounded-full bg-green-500 animate-pulse shrink-0 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                                            <span className="text-xs font-medium text-muted-foreground truncate flex-1 font-mono">
+                                                {serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                                            </span>
+                                        </div>
+                                    )}
                                     <Button
                                         variant="ghost"
-                                        className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        className="w-full justify-start gap-2 h-9 px-2 text-destructive hover:text-destructive hover:bg-destructive/10 font-medium"
                                         onClick={handleDisconnect}
                                     >
                                         <LogOut className="size-4" />
                                         Disconnect
                                     </Button>
-                                    <div className="flex items-center justify-between px-2 py-1">
-                                        <span className="text-sm text-muted-foreground">Theme</span>
+                                    <div className="flex items-center justify-between px-2 py-1.5 h-9">
+                                        <span className="text-sm font-medium">Theme</span>
                                         <ThemeSwitcher />
                                     </div>
                                 </div>
@@ -197,6 +206,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const location = useLocation();
     const isMobile = useIsMobile();
 
+    // Scroll to top on every route change
+    useEffect(() => {
+        const container = document.getElementById('main-scroll-container');
+        if (container) {
+            container.scrollTop = 0;
+        }
+    }, [location.pathname]);
+
     const getDisplayUrl = () => {
         if (!serverUrl) return null;
         try {
@@ -213,7 +230,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
             <Sidebar />
-            <main className={cn(
+            <main id="main-scroll-container" className={cn(
                 "max-h-dvh overflow-y-auto",
                 isMediaDetailRoute
                     ? (isMobile ? "pb-20 px-0 pt-0" : "pt-0 pb-0 pl-16")
@@ -228,8 +245,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </main>
             {serverUrl && location.pathname !== '/watch' && (
                 <div className={cn(
-                    "fixed z-50 flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-md rounded-full border border-border shadow-lg",
-                    isMobile ? "bottom-20 right-4" : "bottom-4 right-4"
+                    "fixed z-50 hidden md:flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-md rounded-full border border-border shadow-lg bottom-4 right-4"
                 )}>
                     <div className={cn(
                         "w-2 h-2 rounded-full animate-pulse",
