@@ -51,9 +51,6 @@ const [detailView, setDetailView] = useState<TorrentResult | null>(null);
 
     if (!show) return null;
 
-    const selectedProviderInfo = providers.find(p => p.id === selectedProvider);
-    const isCustomProvider = selectedProviderInfo?.type === "custom";
-
     const handleResultClick = async (torrent: TorrentResult) => {
         if (torrent.url && fetchDetailFromUrl) {
             setDetailView(torrent);
@@ -228,13 +225,16 @@ torrentResults.map((torrent, index) => (
                                         </Badge>
                                     </div>
                                     <div className="flex gap-2 pt-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1 gap-1.5"
-                                            onClick={() => copyMagnet(detailView.url)}
-                                        >
-                                            {copiedMagnet === detailView.url ? (
+                                        {detailView.url && (() => {
+                                            const url = detailView.url;
+                                            return (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1 gap-1.5"
+                                                onClick={() => copyMagnet(url)}
+                                            >
+                                                {copiedMagnet === url ? (
                                                 <>
                                                     <Check className="size-3" />
                                                     Copied
@@ -245,7 +245,9 @@ torrentResults.map((torrent, index) => (
                                                     Copy URL
                                                 </>
                                             )}
-                                        </Button>
+                                            </Button>
+                                            );
+                                        })()}
                                         <Button
                                             size="sm"
                                             className="flex-1 gap-1.5"

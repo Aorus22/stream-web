@@ -260,13 +260,6 @@ export function CustomProviderEditorPage() {
         }
     };
 
-    // Auto-fill detail URL from clicked result
-    const handleResultClick = (url: string) => {
-        setDetailUrl(url);
-        setShowDetailResult(false); // Clear previous result
-        setShowDetailHtmlPreview(false); // Clear previous HTML preview
-    };
-
     const handlePreviewHtml = async () => {
         if (!serverUrl || !baseUrl) return;
 

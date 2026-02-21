@@ -144,34 +144,6 @@ export function Search() {
         }
     };
 
-const fetchDetailFromUrl = async (url: string, resultName: string) => {
-        if (!serverUrl || !selectedProvider) return;
-        
-        const provider = providers.find(p => p.id === selectedProvider);
-        if (provider?.type !== "custom") return;
-
-        setLoadingDetailUrl(url);
-        try {
-            const res = await fetch(
-                `${serverUrl}/api/search/custom/${selectedProvider}?detailUrl=${encodeURIComponent(url)}`
-            );
-            const data = await res.json();
-
-            if (data.result?.type === 'detail') {
-                setResults(prev =>
-                    prev.map(item => item.url === url ? {
-                        ...item,
-                        magnet: data.result.magnetLink || ''
-                    } : item)
-                );
-            }
-        } catch (err) {
-            console.error("Failed to fetch detail:", err);
-        } finally {
-            setLoadingDetailUrl(null);
-        }
-    };
-
     const handleSearch = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         performSearch();
