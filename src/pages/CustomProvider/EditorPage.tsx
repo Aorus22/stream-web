@@ -370,494 +370,704 @@ export function CustomProviderEditorPage() {
         );
     }
 
-return (
-        <div className="space-y-6 pb-8">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate(-1)}
-                >
-                    <ArrowLeft className="size-4" />
-                </Button>
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-xl ring-1 ring-purple-500/20">
-                        <Code2 className="size-6 text-purple-500" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                            {isEdit ? "Edit Provider" : "New Provider"}
-                        </h1>
-                        <p className="text-muted-foreground text-xs md:text-sm">
-                            {isEdit ? "Modify your custom scraper" : "Create a new custom scraper"}
-                        </p>
-                    </div>
-                </div>
-                <div className="ml-auto">
+        return (
+    
+            <div className="space-y-6 p-4 md:p-8 max-w-[1600px] mx-auto pb-20">
+    
+                {/* Header */}
+    
+                <div className="flex items-center gap-4 border-b border-border/40 pb-6">
+    
                     <Button
-                        onClick={handleSave}
-                        disabled={!name || !baseUrl || !code || saving || !serverUrl}
-                        className="gap-2"
+    
+                        variant="outline"
+    
+                        size="icon"
+    
+                        onClick={() => navigate(-1)}
+    
+                        className="h-10 w-10 rounded-full border-border/60 hover:bg-muted/50 transition-colors"
+    
                     >
-                        {saving ? (
-                            <>
-                                <Loader2 className="size-4 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="size-4" />
-                                Save
-                            </>
-                        )}
+    
+                        <ArrowLeft className="size-5" />
+    
                     </Button>
-                </div>
-            </div>
-
-            {/* Box 1: Provider Configuration */}
-            <Card>
-                <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Code2 className="size-5 text-purple-500" />
-                        <h3 className="font-semibold">Provider Configuration</h3>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Provider Name</Label>
-                            <Input
-                                id="name"
-                                placeholder="e.g., My Torrent Site"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
+    
+                    <div className="flex items-center gap-4">
+    
+                        <div className="p-2.5 bg-primary/10 rounded-xl ring-1 ring-primary/20 shadow-inner hidden md:block">
+    
+                            <Code2 className="size-6 text-primary" />
+    
                         </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="baseUrl">Base URL Template</Label>
-                            <Input
-                                id="baseUrl"
-                                placeholder="https://example.com/search?q={q}"
-                                value={baseUrl}
-                                onChange={(e) => setBaseUrl(e.target.value)}
-                                className="font-mono text-sm"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Use <code className="bg-muted px-1 py-0.5 rounded">{'{q}'}</code> as placeholder for search query
+    
+                        <div>
+    
+                            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
+    
+                                {isEdit ? "Edit Provider" : "New Provider"}
+    
+                            </h1>
+    
+                            <p className="text-muted-foreground text-sm">
+    
+                                {isEdit ? "Modify your custom scraper logic" : "Create a new custom scraper"}
+    
                             </p>
+    
                         </div>
+    
                     </div>
-
-                    <div className="space-y-2">
-                        <Label>Page Type</Label>
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="pageType"
-                                    checked={pageType === "list"}
-                                    onChange={() => setPageType("list")}
-                                    className="accent-primary"
-                                />
-                                <span className="text-sm">List (Search Results)</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="pageType"
-                                    checked={pageType === "detail"}
-                                    onChange={() => setPageType("detail")}
-                                    className="accent-primary"
-                                />
-                                <span className="text-sm">Detail (Magnet Link)</span>
-                            </label>
-                        </div>
+    
+                    <div className="ml-auto flex items-center gap-3">
+    
+                        <Button
+    
+                            onClick={handleSave}
+    
+                            disabled={!name || !baseUrl || !code || saving || !serverUrl}
+    
+                            className="shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all gap-2 min-w-[120px]"
+                        >
+    
+                            {saving ? (
+    
+                                <>
+    
+                                    <Loader2 className="size-4 animate-spin" />
+    
+                                    Saving...
+    
+                                </>
+    
+                            ) : (
+    
+                                <>
+    
+                                    <Save className="size-4" />
+    
+                                    Save
+    
+                                </>
+    
+                            )}
+    
+                        </Button>
+    
                     </div>
-
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label>JavaScript Code</Label>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setCode(DEFAULT_SCRIPT)}
-                                className="h-7 text-xs"
-                            >
-                                Reset to Default
-                            </Button>
-                        </div>
-                        <div className="border rounded-md overflow-hidden">
-                            <Editor
-                                height="400px"
-                                defaultLanguage="javascript"
-                                value={code}
-                                onChange={(value) => setCode(value || "")}
-                                theme="vs-dark"
-                                options={{
-                                    minimap: { enabled: false },
-                                    fontSize: 13,
-                                    lineNumbers: "on",
-                                    scrollBeyondLastLine: false,
-                                    automaticLayout: true,
-                                    tabSize: 2,
-                                }}
-                            />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            Available: <code className="bg-muted px-1 py-0.5 rounded">ARG_FULL_URL</code>,
-                            <code className="bg-muted px-1 py-0.5 rounded">ARG_PAGE_TYPE</code>,
-                            <code className="bg-muted px-1 py-0.5 rounded">require()</code>
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Box 2: Variables Reference */}
-            <Card>
-                <CardContent className="pt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Code2 className="size-5 text-purple-500" />
-                        <h3 className="font-semibold">Variables Reference</h3>
-                    </div>
-                    <div className="grid md:grid-cols-3 gap-3 text-sm">
-                        <div className="p-3 bg-muted rounded-lg">
-                            <code className="text-purple-500">ARG_FULL_URL</code>
-                            <p className="text-muted-foreground mt-1">The full URL with {'{q}'} replaced by actual query</p>
-                        </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                            <code className="text-purple-500">ARG_PAGE_TYPE</code>
-                            <p className="text-muted-foreground mt-1">"list" or "detail" - use this to control which function to run</p>
-                        </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                            <code className="text-purple-500">require()</code>
-                            <p className="text-muted-foreground mt-1">Node.js require function (cheerio, https, etc.)</p>
-                        </div>
-                    </div>
-
-                    <h4 className="font-semibold mt-6 mb-3">Expected Return Format</h4>
-                    <div className="grid md:grid-cols-2 gap-3">
-                        <div className="p-3 bg-muted rounded-lg">
-                            <p className="text-xs font-medium mb-2">List page type:</p>
-                            <pre className="text-xs overflow-x-auto">
-{`{
-  type: 'list',
-  results: [
-    { name, url, seeds, leeches, size }
-  ]
-}`}
-                            </pre>
-                        </div>
-                        <div className="p-3 bg-muted rounded-lg">
-                            <p className="text-xs font-medium mb-2">Detail page type:</p>
-                            <pre className="text-xs overflow-x-auto">
-{`{
-  type: 'detail',
-  name,
-  magnetLink,
-  directDownloads: [{ url, text }],
-  similarFiles: []
-}`}
-                            </pre>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Box 3: Testing Zone */}
-            <Card>
-                <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Play className="size-5 text-purple-500" />
-                        <h3 className="font-semibold">Testing Zone</h3>
-                    </div>
-
-                    {/* Main Test Section */}
-                    <div className="space-y-3">
-                        <div className="grid md:grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="query">Query Parameter (Optional)</Label>
-                                <Input
-                                    id="query"
-                                    placeholder="e.g., Inception, movie name..."
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleTest()}
-                                />
-                            </div>
-<div className="space-y-2">
-                                <Label>Full URL</Label>
-                                <div className="p-2 bg-muted rounded text-xs font-mono break-words">
-                                    {query
-                                        ? baseUrl.replace("{q}", encodeURIComponent(query))
-                                        : baseUrl || "(enter base URL)"}
+    
+                </div>
+    
+    
+    
+                <div className="grid md:grid-cols-3 gap-6 lg:gap-8 h-full">
+    
+                    {/* Left Column: Configuration & Code */}
+    
+                    <div className="md:col-span-2 space-y-6">
+    
+                        <Card className="border-border/50 shadow-sm bg-card/50 backdrop-blur-sm">
+    
+                            <CardContent className="pt-6 space-y-6">
+    
+                                <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+    
+                                    <Code2 className="size-5 text-primary" />
+    
+                                    <h3 className="font-semibold text-lg">Configuration</h3>
+    
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                            <Button
-                                onClick={handlePreviewHtml}
-                                disabled={!baseUrl || previewingHtml || !serverUrl}
-                                variant="outline"
-                                className="flex-1 gap-2"
-                            >
-                                {previewingHtml ? (
-                                    <>
-                                        <Loader2 className="size-4 animate-spin" />
-                                        Loading...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Eye className="size-4" />
-                                        Preview HTML
-                                    </>
-                                )}
-                            </Button>
-                            <Button
-                                onClick={handleTest}
-                                disabled={!baseUrl || !code || testing || !serverUrl}
-                                className="flex-1 gap-2"
-                            >
-                                {testing ? (
-                                    <>
-                                        <Loader2 className="size-4 animate-spin" />
-                                        Testing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="size-4" />
-                                        Test Script
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-
-                        {/* HTML Preview */}
-                        {showHtmlPreview && (
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <Label className="flex items-center gap-2">
-                                        <Eye className="size-4" />
-                                        HTML Preview
+    
+    
+    
+                                <div className="grid md:grid-cols-2 gap-6">
+    
+                                    <div className="space-y-2.5">
+    
+                                        <Label htmlFor="name" className="text-sm font-medium">Provider Name</Label>
+    
+                                        <Input
+    
+                                            id="name"
+    
+                                            placeholder="e.g., My Torrent Site"
+    
+                                            value={name}
+    
+                                            onChange={(e) => setName(e.target.value)}
+    
+                                            className="bg-background/50 focus:bg-background transition-colors"
+    
+                                        />
+    
+                                    </div>
+    
+    
+    
+                                    <div className="space-y-2.5">
+    
+                                        <Label htmlFor="baseUrl" className="text-sm font-medium">Base URL Template</Label>
+    
+                                        <div className="relative">
+    
+                                            <Input
+    
+                                                id="baseUrl"
+    
+                                                placeholder="https://example.com/search?q={q}"
+    
+                                                value={baseUrl}
+    
+                                                onChange={(e) => setBaseUrl(e.target.value)}
+    
+                                                className="font-mono text-sm pr-20 bg-background/50 focus:bg-background transition-colors"
+    
+                                            />
+    
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+    
+                                                <code className="bg-muted px-1.5 py-0.5 rounded text-[10px] text-muted-foreground border border-border/50">
+    
+                                                    {'{q}'}
+    
+                                                </code>
+    
+                                            </div>
+    
+                                        </div>
+    
+                                    </div>
+    
+                                </div>
+    
+    
+    
+                                <div className="space-y-3">
+    
+                                    <Label className="text-sm font-medium">Page Type</Label>
+    
+                                    <div className="flex gap-4 p-1 bg-muted/30 rounded-lg w-fit">
+    
+                                        <label className={`flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer transition-all ${pageType === "list" ? "bg-background shadow-sm text-foreground ring-1 ring-border" : "text-muted-foreground hover:text-foreground"}`}>
+    
+                                            <input
+    
+                                                type="radio"
+    
+                                                name="pageType"
+    
+                                                checked={pageType === "list"}
+    
+                                                onChange={() => setPageType("list")}
+    
+                                                className="sr-only"
+    
+                                            />
+    
+                                            <span className="text-sm font-medium">List (Search Results)</span>
+    
+                                        </label>
+    
+                                        <label className={`flex items-center gap-2 px-4 py-2 rounded-md cursor-pointer transition-all ${pageType === "detail" ? "bg-background shadow-sm text-foreground ring-1 ring-border" : "text-muted-foreground hover:text-foreground"}`}>
+    
+                                            <input
+    
+                                                type="radio"
+    
+                                                name="pageType"
+    
+                                                checked={pageType === "detail"}
+    
+                                                onChange={() => setPageType("detail")}
+    
+                                                className="sr-only"
+    
+                                            />
+    
+                                            <span className="text-sm font-medium">Detail (Magnet Link)</span>
+    
+                                        </label>
+    
+                                    </div>
+    
+                                </div>
+    
+                            </CardContent>
+    
+                        </Card>
+    
+    
+    
+                        <Card className="border-border/50 shadow-sm bg-card/50 backdrop-blur-sm flex flex-col min-h-[500px]">
+    
+                            <CardContent className="pt-4 p-0 flex flex-col flex-1">
+    
+                                <div className="px-6 py-3 flex items-center justify-between border-b border-border/40 bg-muted/20">
+    
+                                    <Label className="text-sm font-medium flex items-center gap-2">
+    
+                                        <div className="w-2 h-2 rounded-full bg-primary/80"></div>
+    
+                                        JavaScript Logic
+    
                                     </Label>
+    
                                     <Button
+    
                                         variant="ghost"
+    
                                         size="sm"
-                                        onClick={() => setShowHtmlPreview(false)}
-                                        className="h-7 text-xs"
+    
+                                        onClick={() => setCode(DEFAULT_SCRIPT)}
+    
+                                        className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive transition-colors"
+    
                                     >
-                                        Clear
+    
+                                        Reset to Default
+    
                                     </Button>
+    
                                 </div>
-                                <div className="border rounded-lg bg-muted/50 p-3 max-h-[300px] overflow-auto">
-                                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                                        {htmlContent}
-                                    </pre>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Test Result */}
-                        {showTestResult && testResult && (
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Play className="size-4" />
-                                        <Label>Script Result</Label>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setShowTestResult(false)}
-                                        className="h-7 text-xs"
-                                    >
-                                        Clear
-                                    </Button>
-                                </div>
-
-                                {testResult.error ? (
-                                    <div className="border rounded-lg bg-muted/50 p-3">
-                                        <div className="text-red-500 text-sm">
-                                            <p className="font-medium">Error:</p>
-                                            <p>{testResult.error}</p>
-                                        </div>
-                                    </div>
-                                ) : testResult.result?.type === 'list' && testResult.result.results ? (
-                                    <div className="grid md:grid-cols-2 gap-3">
-                                        {/* JSON View */}
-                                        <div className="space-y-1">
-                                            <Label className="text-xs text-muted-foreground">JSON Raw</Label>
-                                            <div className="border rounded-lg bg-muted/50 p-2 max-h-[250px] overflow-auto">
-                                                <pre className="text-xs overflow-x-auto">
-                                                    {JSON.stringify(testResult.result, null, 2)}
-                                                </pre>
-                                            </div>
-                                        </div>
-
-                                        {/* Clickable View */}
-                                        <div className="space-y-1">
-                                            <Label className="text-xs text-muted-foreground">Clickable (Click to test detail)</Label>
-                                            <div className="border rounded-lg bg-muted/50 p-2 max-h-[250px] overflow-auto">
-                                                <div className="space-y-1">
-                                                    {testResult.result.results.map((item: { url: string; [key: string]: unknown }, idx: number) => (
-                                                        <div
-                                                            key={idx}
-                                                            onClick={() => handleResultClick(item.url)}
-                                                            className="p-2 bg-background hover:bg-muted/50 cursor-pointer border rounded transition-colors"
-                                                        >
-                                                            <div className="font-medium text-sm text-foreground">
-                                                                {(item.name as string) || "Unnamed"}
+    
+                                                            <div className="relative border-b border-border/40">
+    
+                                                                <Editor
+    
+                                                                    height="600px"
+    
+                                                                    defaultLanguage="javascript"
+    
+                                                                    value={code}
+    
+                                                                    onChange={(value) => setCode(value || "")}
+    
+                                                                    theme="vs-dark"
+    
+                                                                    options={{
+    
+                                                                        minimap: { enabled: false },
+    
+                                                                        fontSize: 14,
+    
+                                                                        lineNumbers: "on",
+    
+                                                                        scrollBeyondLastLine: false,
+    
+                                                                        automaticLayout: true,
+    
+                                                                        tabSize: 2,
+    
+                                                                        padding: { top: 16, bottom: 16 },
+    
+                                                                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    
+                                                                    }}
+    
+                                                                />
+    
                                                             </div>
-                                                            <div className="text-xs text-muted-foreground mt-1">
-                                                                Size: {(item.size as string) || "Unknown"} |
-                                                                Seeds: {(item.seeds as number) || 0} |
-                                                                Leeches: {(item.leeches as number) || 0}
-                                                            </div>
-                                                            <div className="text-purple-500 text-xs mt-1 truncate">
-                                                                {item.url}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : testResult.result ? (
-                                    <div className="border rounded-lg bg-muted/50 p-3 max-h-[300px] overflow-auto">
-                                        <pre className="text-xs overflow-x-auto">
-                                            {JSON.stringify(testResult.result, null, 2)}
-                                        </pre>
-                                    </div>
-                                ) : (
-                                    <div className="border rounded-lg bg-muted/50 p-3 max-h-[300px] overflow-auto">
-                                        <pre className="text-xs overflow-x-auto">
-                                            {JSON.stringify(testResult, null, 2)}
-                                        </pre>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Detail URL Test (for list type providers) */}
-                        {pageType === "list" && (
-                            <div className="space-y-3 pt-3 border-t">
-                                <Label className="text-purple-500">Detail URL Test (Optional)</Label>
-                                <Input
-                                    placeholder="Paste a URL from list results above..."
-                                    value={detailUrl}
-                                    onChange={(e) => setDetailUrl(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleTestDetail()}
-                                    className="text-xs font-mono"
-                                />
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={handlePreviewDetailHtml}
-                                        disabled={!detailUrl || previewingDetailHtml || !serverUrl}
-                                        variant="outline"
-                                        className="flex-1 gap-2"
-                                        size="sm"
-                                    >
-                                        {previewingDetailHtml ? (
-                                            <>
-                                                <Loader2 className="size-3 animate-spin" />
-                                                Loading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Eye className="size-3" />
-                                                HTML
-                                            </>
-                                        )}
-                                    </Button>
-                                    <Button
-                                        onClick={handleTestDetail}
-                                        disabled={!detailUrl || !code || testingDetail || !serverUrl}
-                                        variant="outline"
-                                        className="flex-1 gap-2"
-                                        size="sm"
-                                    >
-                                        {testingDetail ? (
-                                            <>
-                                                <Loader2 className="size-3 animate-spin" />
-                                                Testing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Play className="size-3" />
-                                                Test Detail
-                                            </>
-                                        )}
-                                    </Button>
+    
+                                <div className="px-4 py-2 bg-muted/30 border-t border-border/40 text-[11px] text-muted-foreground flex gap-3">
+    
+                                    <span>Available Globals:</span>
+    
+                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_FULL_URL</code>
+    
+                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_PAGE_TYPE</code>
+    
+                                    <code className="bg-muted px-1 rounded border border-border/50">require()</code>
+    
                                 </div>
-
-                                {/* Detail HTML Preview */}
-                                {showDetailHtmlPreview && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="flex items-center gap-2 text-sm">
-                                                <Eye className="size-3" />
-                                                Detail HTML Preview
-                                            </Label>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setShowDetailHtmlPreview(false)}
-                                                className="h-6 text-xs"
-                                            >
-                                                Clear
-                                            </Button>
-                                        </div>
-                                        <div className="border rounded-lg bg-muted/50 p-2 max-h-[200px] overflow-auto">
-                                            <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                                                {detailHtmlContent}
-                                            </pre>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Detail Result */}
-                                {showDetailResult && detailResult && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="flex items-center gap-2 text-sm">
-                                                <Play className="size-3" />
-                                                Detail Result
-                                            </Label>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setShowDetailResult(false)}
-                                                className="h-6 text-xs"
-                                            >
-                                                Clear
-                                            </Button>
-                                        </div>
-                                        <div className="border rounded-lg bg-muted/50 p-2 max-h-[200px] overflow-auto">
-                                            {detailResult.error ? (
-                                                <div className="text-red-500 text-xs">
-                                                    <p className="font-medium">Error:</p>
-                                                    <p>{detailResult.error}</p>
-                                                </div>
-                                            ) : detailResult.result ? (
-                                                <pre className="text-xs overflow-x-auto">
-                                                    {JSON.stringify(detailResult.result, null, 2)}
-                                                </pre>
-                                            ) : (
-                                                <pre className="text-xs overflow-x-auto">
-                                                    {JSON.stringify(detailResult, null, 2)}
-                                                </pre>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+    
+                            </CardContent>
+    
+                        </Card>
+    
                     </div>
-                </CardContent>
-            </Card>
-        </div>
-    );
+    
+    
+    
+                    {/* Right Column: Testing & Help */}
+    
+                    <div className="space-y-6">
+    
+                        {/* Testing Zone */}
+    
+                        <Card className="border-border/50 shadow-md bg-card border-t-4 border-t-primary">
+    
+                            <CardContent className="pt-6 space-y-4">
+    
+                                <div className="flex items-center justify-between pb-2 border-b border-border/40">
+    
+                                    <div className="flex items-center gap-2">
+    
+                                        <Play className="size-4 text-primary" />
+    
+                                        <h3 className="font-semibold text-sm uppercase tracking-wider">Debugger</h3>
+    
+                                    </div>
+    
+                                    <div className="flex gap-1">
+    
+                                         <Button
+    
+                                            onClick={handleTest}
+    
+                                            disabled={!baseUrl || !code || testing || !serverUrl}
+    
+                                            size="sm"
+    
+                                            className="h-7 text-xs"
+                                        >
+    
+                                            {testing ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3 mr-1" />}
+    
+                                            Run
+    
+                                        </Button>
+    
+                                    </div>
+    
+                                </div>
+    
+    
+    
+                                {/* Inputs */}
+    
+                                <div className="space-y-4">
+    
+                                    <div className="space-y-1.5">
+    
+                                        <Label htmlFor="query" className="text-xs font-medium text-muted-foreground">Search Query</Label>
+    
+                                        <div className="flex gap-2">
+    
+                                            <Input
+    
+                                                id="query"
+    
+                                                placeholder="e.g., Inception"
+    
+                                                value={query}
+    
+                                                onChange={(e) => setQuery(e.target.value)}
+    
+                                                onKeyDown={(e) => e.key === "Enter" && handleTest()}
+    
+                                                className="h-8 text-sm"
+    
+                                            />
+    
+                                        </div>
+    
+                                    </div>
+    
+                                    
+    
+                                    <div className="space-y-1.5">
+    
+                                        <Label className="text-xs font-medium text-muted-foreground">Generated URL</Label>
+    
+                                        <div className="p-2 bg-muted/40 rounded border border-border/50 text-[10px] font-mono break-all text-foreground/80 min-h-[2.5rem] flex items-center">
+    
+                                            {query
+    
+                                                ? baseUrl.replace("{q}", encodeURIComponent(query))
+    
+                                                : baseUrl || <span className="text-muted-foreground italic">(enter base URL)</span>}
+    
+                                        </div>
+    
+                                    </div>
+    
+    
+    
+                                    <div className="grid grid-cols-2 gap-2">
+    
+                                        <Button
+    
+                                            onClick={handlePreviewHtml}
+    
+                                            disabled={!baseUrl || previewingHtml || !serverUrl}
+    
+                                            variant="secondary"
+    
+                                            size="sm"
+    
+                                            className="text-xs h-8"
+    
+                                        >
+    
+                                            {previewingHtml ? <Loader2 className="size-3 animate-spin mr-1" /> : <Eye className="size-3 mr-1" />}
+    
+                                            Preview HTML
+    
+                                        </Button>
+    
+                                    </div>
+    
+                                </div>
+    
+    
+    
+                                {/* Results Area */}
+    
+                                <div className="space-y-2 pt-2 border-t border-border/40">
+    
+                                    <Label className="text-xs font-medium text-muted-foreground">Console Output</Label>
+    
+                                    
+    
+                                    {showTestResult && testResult ? (
+    
+                                        <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[300px] overflow-auto custom-scrollbar">
+    
+                                            {testResult.error ? (
+    
+                                                <div className="text-red-400 text-xs font-mono">
+    
+                                                    <span className="font-bold">Error:</span> {testResult.error}
+    
+                                                </div>
+    
+                                            ) : (
+    
+                                                <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
+    
+                                                    {JSON.stringify(testResult.result, null, 2)}
+    
+                                                </pre>
+    
+                                            )}
+    
+                                        </div>
+    
+                                    ) : showHtmlPreview ? (
+    
+                                        <div className="rounded-md border border-border/50 bg-muted/50 p-3 max-h-[300px] overflow-auto">
+    
+                                             <div className="flex justify-end mb-2">
+    
+                                                <Button size="sm" variant="ghost" onClick={() => setShowHtmlPreview(false)} className="h-5 text-[10px]">Close</Button>
+    
+                                            </div>
+    
+                                            <pre className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap">
+    
+                                                {htmlContent}
+    
+                                            </pre>
+    
+                                        </div>
+    
+                                    ) : (
+    
+                                        <div className="rounded-md border border-border/50 bg-muted/20 p-8 flex flex-col items-center justify-center text-muted-foreground/50">
+    
+                                            <Play className="size-8 mb-2 opacity-20" />
+    
+                                            <span className="text-xs">Run a test to see results</span>
+    
+                                        </div>
+    
+                                    )}
+    
+                                </div>
+    
+    
+    
+                                {/* Detail URL Test (restored) */}
+    
+                                {pageType === "list" && (
+    
+                                    <div className="space-y-4 pt-4 border-t border-border/40">
+    
+                                        <div className="flex items-center gap-2">
+    
+                                            <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+    
+                                            <Label className="text-xs font-semibold text-secondary-foreground uppercase tracking-wider">Detail Page Test</Label>
+    
+                                        </div>
+    
+                                        
+    
+                                        <div className="space-y-2">
+    
+                                            <Input
+    
+                                                placeholder="Paste detail URL..."
+    
+                                                value={detailUrl}
+    
+                                                onChange={(e) => setDetailUrl(e.target.value)}
+    
+                                                onKeyDown={(e) => e.key === "Enter" && handleTestDetail()}
+    
+                                                className="h-8 text-sm bg-muted/20"
+    
+                                            />
+    
+                                            <div className="grid grid-cols-2 gap-2">
+    
+                                                <Button
+    
+                                                    onClick={handlePreviewDetailHtml}
+    
+                                                    disabled={!detailUrl || previewingDetailHtml || !serverUrl}
+    
+                                                    variant="secondary"
+    
+                                                    size="sm"
+    
+                                                    className="text-xs h-7"
+    
+                                                >
+    
+                                                    {previewingDetailHtml ? <Loader2 className="size-3 animate-spin mr-1" /> : <Eye className="size-3 mr-1" />}
+    
+                                                    HTML
+    
+                                                </Button>
+    
+                                                <Button
+    
+                                                    onClick={handleTestDetail}
+    
+                                                    disabled={!detailUrl || !code || testingDetail || !serverUrl}
+    
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="text-xs h-7"
+    
+                                                >
+    
+                                                    {testingDetail ? <Loader2 className="size-3 animate-spin mr-1" /> : <Play className="size-3 mr-1" />}
+    
+                                                    Test Detail
+    
+                                                </Button>
+    
+                                            </div>
+    
+                                        </div>
+    
+    
+    
+                                        {/* Detail Results */}
+    
+                                        {(showDetailResult && detailResult) || showDetailHtmlPreview ? (
+    
+                                            <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[300px] overflow-auto custom-scrollbar relative">
+    
+                                                <Button 
+    
+                                                    size="sm" 
+    
+                                                    variant="ghost" 
+    
+                                                    onClick={() => { setShowDetailResult(false); setShowDetailHtmlPreview(false); }} 
+    
+                                                    className="absolute top-1 right-1 h-5 w-5 p-0 text-muted-foreground hover:text-white"
+    
+                                                >
+    
+                                                    ×
+    
+                                                </Button>
+    
+                                                {showDetailHtmlPreview ? (
+    
+                                                    <pre className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap">
+    
+                                                        {detailHtmlContent}
+    
+                                                    </pre>
+    
+                                                ) : detailResult?.error ? (
+    
+                                                    <div className="text-red-400 text-xs font-mono">
+    
+                                                        <span className="font-bold">Error:</span> {detailResult.error}
+    
+                                                    </div>
+    
+                                                ) : (
+    
+                                                    <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
+    
+                                                        {JSON.stringify(detailResult?.result, null, 2)}
+    
+                                                    </pre>
+    
+                                                )}
+    
+                                            </div>
+    
+                                        ) : null}
+    
+                                    </div>
+    
+                                )}
+    
+                            </CardContent>
+    
+                        </Card>
+    
+    
+    
+                        {/* Quick Help */}
+    
+                        <Card className="border-border/50 shadow-sm bg-muted/10">
+    
+                            <CardContent className="pt-6">
+    
+                                 <div className="flex items-center gap-2 mb-4">
+    
+                                    <Code2 className="size-4 text-primary" />
+    
+                                    <h3 className="font-semibold text-sm">Quick Reference</h3>
+    
+                                </div>
+    
+                                <div className="space-y-3 text-xs">
+    
+                                    <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
+    
+                                        <code className="text-primary font-bold block mb-1">ARG_FULL_URL</code>
+    
+                                        <p className="text-muted-foreground leading-relaxed">Contains the fully constructed URL with query parameters.</p>
+    
+                                    </div>
+    
+                                    <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
+    
+                                        <code className="text-primary font-bold block mb-1">return {'{...}'}</code>
+    
+                                        <p className="text-muted-foreground leading-relaxed">
+    
+                                            Must return an object with <code className="bg-muted px-1 rounded">type: 'list'</code> or <code className="bg-muted px-1 rounded">type: 'detail'</code>.
+    
+                                        </p>
+    
+                                    </div>
+    
+                                </div>
+    
+                            </CardContent>
+    
+                        </Card>
+    
+                    </div>
+    
+                </div>
+    
+            </div>
+    
+        );
+    
 }
 
 export default CustomProviderEditorPage;
