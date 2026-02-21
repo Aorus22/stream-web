@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label";
 import { useServer } from "@/contexts/ServerContext";
 import Editor from "@monaco-editor/react";
 
+// Import templates
+import luaTemplate from "./templates/template.lua?raw";
+
 // Types for test results
 interface TestResult {
     result?: {
@@ -19,135 +22,16 @@ interface TestResult {
     [key: string]: unknown;
 }
 
-const DEFAULT_SCRIPT = `const https = require('https');
-const cheerio = require('cheerio');
-
-async function fetchUrl(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => resolve(data));
-    }).on('error', reject);
-  });
-}
-
-async function parseListPage(fullUrl) {
-  try {
-    const html = await fetchUrl(fullUrl);
-    const $ = cheerio.load(html);
-    const results = [];
-
-    $('table.table-list tbody tr, table tbody tr').each((i, elem) => {
-      const $row = $(elem);
-      if ($row.find('th').length > 0) return;
-
-      const cols = $row.find('td');
-      if (cols.length < 3) return;
-
-      const nameCell = $row.find('td.coll-1.name, td.coll-1, td:nth-child(1)').first();
-      const allLinks = nameCell.find('a');
-      let name = '';
-      let relativeUrl = '';
-
-      if (allLinks.length >= 2) {
-        name = allLinks.eq(1).text().trim();
-        relativeUrl = allLinks.eq(1).attr('href');
-      } else if (allLinks.length === 1) {
-        name = allLinks.eq(0).text().trim();
-        relativeUrl = allLinks.eq(0).attr('href');
-      }
-
-      if (!name || name.length < 3 || !relativeUrl) return;
-
-      const url = relativeUrl.startsWith('http')
-        ? relativeUrl
-        : (relativeUrl.startsWith('//')
-          ? 'https:' + relativeUrl
-          : new URL(relativeUrl, fullUrl).href);
-
-      let seeds = 0;
-      const seedsCol = $row.find('td.coll-2, td:nth-child(2)').first();
-      const seedsText = seedsCol.text().trim();
-      if (seedsText) {
-        const parsed = parseInt(seedsText.replace(/,/g, ''));
-        if (!isNaN(parsed)) seeds = parsed;
-      }
-
-      let leeches = 0;
-      const leechesCol = $row.find('td.coll-3, td:nth-child(3)').first();
-      const leechesText = leechesCol.text().trim();
-      if (leechesText) {
-        const parsed = parseInt(leechesText.replace(/,/g, ''));
-        if (!isNaN(parsed)) leeches = parsed;
-      }
-
-      let size = 'Unknown';
-      const sizeCol = $row.find('td.coll-4.size, td.coll-4, td.size, td:nth-child(5)').first();
-      if (sizeCol.length > 0) {
-        const sizeText = sizeCol.text().trim();
-        size = sizeText.split(new RegExp('\\n'))[0] || sizeText;
-      }
-
-      results.push({ name, url, seeds, leeches, size, uploader: '', time: '' });
-    });
-
-    return { type: 'list', results };
-  } catch (error) {
-    return { type: 'error', error: error.message };
-  }
-}
-
-async function parseDetailPage(fullUrl) {
-  try {
-    const html = await fetchUrl(fullUrl);
-    const $ = cheerio.load(html);
-
-    const name = $('h1, title, .title, .name').first().text().trim() || 'Unknown';
-
-    let magnetLink = '';
-    $('a[href^="magnet:"]').each((i, elem) => {
-      magnetLink = $(elem).attr('href');
-      return false;
-    });
-
-    const directDownloads = [];
-    $('a[href*="download"], a[href*=".torrent"]').each((i, elem) => {
-      const href = $(elem).attr('href');
-      if (href && !href.startsWith('magnet:') && !href.startsWith('#')) {
-        directDownloads.push({
-          url: href.startsWith('http') ? href : new URL(href, fullUrl).href,
-          text: $(elem).text().trim() || 'Download'
-        });
-      }
-    });
-
-    return { type: 'detail', name, magnetLink, directDownloads, similarFiles: [] };
-  } catch (error) {
-    return { type: 'error', name: 'Error', magnetLink: '', directDownloads: [], similarFiles: [], error: error.message };
-  }
-}
-
-// Main entry point - ARG_PAGE_TYPE determines which function to use
-if (ARG_PAGE_TYPE === 'list') {
-  return await parseListPage(ARG_FULL_URL);
-} else if (ARG_PAGE_TYPE === 'detail') {
-  return await parseDetailPage(ARG_FULL_URL);
-} else {
-  return await parseListPage(ARG_FULL_URL);
-}
-`;
-
 export function CustomProviderEditorPage() {
     const { serverUrl } = useServer();
     const navigate = useNavigate();
     const { id } = useParams<{ id?: string }>();
     const isEdit = !!id;
-
+    
     const [name, setName] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
     const [pageType, setPageType] = useState<"list" | "detail">("list");
-    const [code, setCode] = useState(DEFAULT_SCRIPT);
+    const [code, setCode] = useState(luaTemplate);
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(isEdit);
 
@@ -156,22 +40,35 @@ export function CustomProviderEditorPage() {
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<TestResult | null>(null);
     const [showTestResult, setShowTestResult] = useState(false);
+    const [displayMode, setDisplayMode] = useState<"interactive" | "json">("interactive");
 
     // Detail URL test states (for list type providers)
     const [detailUrl, setDetailUrl] = useState("");
     const [testingDetail, setTestingDetail] = useState(false);
     const [detailResult, setDetailResult] = useState<TestResult | null>(null);
     const [showDetailResult, setShowDetailResult] = useState(false);
+    const [detailDisplayMode, setDetailDisplayMode] = useState<"interactive" | "json">("interactive");
 
-    // Detail HTML Preview states
-    const [previewingDetailHtml, setPreviewingDetailHtml] = useState(false);
-    const [detailHtmlContent, setDetailHtmlContent] = useState("");
-    const [showDetailHtmlPreview, setShowDetailHtmlPreview] = useState(false);
-
-    // HTML Preview states
     const [previewingHtml, setPreviewingHtml] = useState(false);
-    const [htmlContent, setHtmlContent] = useState("");
-    const [showHtmlPreview, setShowHtmlPreview] = useState(false);
+    const [previewingDetailHtml, setPreviewingDetailHtml] = useState(false);
+
+    const openFullHtmlPreview = (html: string) => {
+        if (!html) return;
+        try {
+            // Store in sessionStorage to avoid URL length limits (Error 431)
+            sessionStorage.setItem('pending_html_preview', html);
+            window.open('/custom-provider/preview/session', '_blank');
+        } catch (err) {
+            console.error("Failed to open full preview:", err);
+            // Fallback for smaller HTML if storage fails
+            try {
+                const encoded = btoa(unescape(encodeURIComponent(html)));
+                window.open(`/custom-provider/preview/${encoded}`, '_blank');
+            } catch (e) {
+                alert("Failed to preview HTML: Content is too large");
+            }
+        }
+    };
 
 // Load provider data if editing
     useEffect(() => {
@@ -191,7 +88,8 @@ export function CustomProviderEditorPage() {
                             setCode(data.code);
                         }
                     } else {
-                        setCode(DEFAULT_SCRIPT);
+                        // Set default script
+                        setCode(luaTemplate);
                     }
                 })
                 .catch(err => console.error("Failed to load provider:", err))
@@ -217,6 +115,7 @@ export function CustomProviderEditorPage() {
                     url: fullUrl,
                     pageType: pageType,
                     isBase64: true,
+                    language: "lua",
                 }),
             });
 
@@ -247,6 +146,7 @@ export function CustomProviderEditorPage() {
                     url: detailUrl,
                     pageType: "detail", // Always use "detail" for child URL testing
                     isBase64: true,
+                    language: "lua",
                 }),
             });
 
@@ -264,8 +164,6 @@ export function CustomProviderEditorPage() {
         if (!serverUrl || !baseUrl) return;
 
         setPreviewingHtml(true);
-        setHtmlContent("");
-        setShowHtmlPreview(true);
         try {
             const fullUrl = query ? baseUrl.replace("{q}", encodeURIComponent(query)) : baseUrl;
 
@@ -277,13 +175,13 @@ export function CustomProviderEditorPage() {
 
             if (response.ok) {
                 const html = await response.text();
-                setHtmlContent(html);
+                openFullHtmlPreview(html);
             } else {
-                setHtmlContent(`Error: ${response.statusText}`);
+                alert(`Error fetching HTML: ${response.statusText}`);
             }
         } catch (err) {
             console.error("Preview HTML failed:", err);
-            setHtmlContent("Failed to fetch HTML: " + (err as Error).message);
+            alert("Failed to fetch HTML: " + (err as Error).message);
         } finally {
             setPreviewingHtml(false);
         }
@@ -293,8 +191,6 @@ export function CustomProviderEditorPage() {
         if (!serverUrl || !detailUrl) return;
 
         setPreviewingDetailHtml(true);
-        setDetailHtmlContent("");
-        setShowDetailHtmlPreview(true);
         try {
             const response = await fetch(`${serverUrl}/api/js/preview`, {
                 method: "POST",
@@ -304,13 +200,13 @@ export function CustomProviderEditorPage() {
 
             if (response.ok) {
                 const html = await response.text();
-                setDetailHtmlContent(html);
+                openFullHtmlPreview(html);
             } else {
-                setDetailHtmlContent(`Error: ${response.statusText}`);
+                alert(`Error fetching detail HTML: ${response.statusText}`);
             }
         } catch (err) {
             console.error("Preview detail HTML failed:", err);
-            setDetailHtmlContent("Failed to fetch HTML: " + (err as Error).message);
+            alert("Failed to fetch HTML: " + (err as Error).message);
         } finally {
             setPreviewingDetailHtml(false);
         }
@@ -322,28 +218,26 @@ export function CustomProviderEditorPage() {
         setSaving(true);
         try {
             const base64Code = btoa(unescape(encodeURIComponent(code)));
+            
+            const payload = {
+                name,
+                baseUrl,
+                pageType,
+                code: base64Code,
+                language: "lua",
+            };
 
             if (isEdit) {
                 await fetch(`${serverUrl}/api/custom-providers/${id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name,
-                        baseUrl,
-                        pageType,
-                        code: base64Code,
-                    }),
+                    body: JSON.stringify(payload),
                 });
             } else {
                 await fetch(`${serverUrl}/api/custom-providers`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name,
-                        baseUrl,
-                        pageType,
-                        code: base64Code,
-                    }),
+                    body: JSON.stringify(payload),
                 });
             }
 
@@ -405,7 +299,7 @@ export function CustomProviderEditorPage() {
     
                             <p className="text-muted-foreground text-sm">
     
-                                {isEdit ? "Modify your custom scraper logic" : "Create a new custom scraper"}
+                                {isEdit ? "Modify your custom Lua scraper logic" : "Create a new custom Lua scraper"}
     
                             </p>
     
@@ -600,9 +494,9 @@ export function CustomProviderEditorPage() {
     
                                     <Label className="text-sm font-medium flex items-center gap-2">
     
-                                        <div className="w-2 h-2 rounded-full bg-primary/80"></div>
+                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
     
-                                        JavaScript Logic
+                                        Lua Logic
     
                                     </Label>
     
@@ -612,7 +506,7 @@ export function CustomProviderEditorPage() {
     
                                         size="sm"
     
-                                        onClick={() => setCode(DEFAULT_SCRIPT)}
+                                        onClick={() => setCode(luaTemplate)}
     
                                         className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive transition-colors"
     
@@ -630,7 +524,8 @@ export function CustomProviderEditorPage() {
     
                                                                     height="600px"
     
-                                                                    defaultLanguage="javascript"
+                                                                    defaultLanguage="lua"
+                                                                    language="lua"
     
                                                                     value={code}
     
@@ -662,23 +557,69 @@ export function CustomProviderEditorPage() {
     
                                                             </div>
     
-                                <div className="px-4 py-2 bg-muted/30 border-t border-border/40 text-[11px] text-muted-foreground flex gap-3">
-    
-                                    <span>Available Globals:</span>
-    
-                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_FULL_URL</code>
-    
-                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_PAGE_TYPE</code>
-    
-                                    <code className="bg-muted px-1 rounded border border-border/50">require()</code>
-    
-                                </div>
-    
-                            </CardContent>
-    
-                        </Card>
-    
-                    </div>
+                                                                <div className="px-4 py-2 bg-muted/30 border-t border-border/40 text-[11px] text-muted-foreground flex gap-3 flex-wrap">
+                                    
+                                                                    <span>Available Globals:</span>
+                                    
+                                                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_FULL_URL</code>
+                                    
+                                                                    <code className="bg-muted px-1 rounded border border-border/50">ARG_PAGE_TYPE</code>
+                                    
+                                                                    <code className="bg-muted px-1 rounded border border-border/50">fetch(url)</code>
+
+                                                                    <code className="bg-muted px-1 rounded border border-border/50">html_parse(html)</code>
+                                    
+                                                                </div>
+                                    
+                                                            </CardContent>
+                                    
+                                                        </Card>
+                                
+                                                        {/* Expected Schema Help (Moved to Left) */}
+                                                        <div className="grid md:grid-cols-2 gap-4">
+                                                            <Card className="border-border/50 shadow-sm bg-primary/5 border-l-4 border-l-emerald-500/50">
+                                                                <CardContent className="pt-4 space-y-3">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <Code2 className="size-4 text-emerald-500" />
+                                                                        <h3 className="font-semibold text-xs uppercase tracking-wider">Type: 'list' (Search)</h3>
+                                                                    </div>
+                                                                    <pre className="p-2 bg-black/80 rounded text-[9px] font-mono text-emerald-400 overflow-x-auto leading-relaxed">
+{`{
+  "type": "list",
+  "results": [
+    {
+      "name": "File Name",
+      "url": "https://site.com/1",
+      "seeds": 120, "leeches": 15,
+      "size": "2.4 GB"
+    }
+  ]
+}`}
+                                                                    </pre>
+                                                                </CardContent>
+                                                            </Card>
+                                
+                                                            <Card className="border-border/50 shadow-sm bg-primary/5 border-l-4 border-l-blue-500/50">
+                                                                <CardContent className="pt-4 space-y-3">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <Code2 className="size-4 text-blue-500" />
+                                                                        <h3 className="font-semibold text-xs uppercase tracking-wider">Type: 'detail' (Magnet)</h3>
+                                                                    </div>
+                                                                    <pre className="p-2 bg-black/80 rounded text-[9px] font-mono text-blue-400 overflow-x-auto leading-relaxed">
+{`{
+  "type": "detail",
+  "name": "File Name",
+  "magnetLink": "magnet:?xt=...",
+  "directDownloads": [
+    { "url": "https://...", "text": "Mirror 1" }
+  ]
+}`}
+                                                                    </pre>
+                                                                </CardContent>
+                                                            </Card>
+                                                        </div>
+                                                    </div>
+                                
     
     
     
@@ -805,205 +746,252 @@ export function CustomProviderEditorPage() {
     
     
     
-                                {/* Results Area */}
-    
-                                <div className="space-y-2 pt-2 border-t border-border/40">
-    
-                                    <Label className="text-xs font-medium text-muted-foreground">Console Output</Label>
-    
+                                                                {/* Results Area */}
                                     
-    
-                                    {showTestResult && testResult ? (
-    
-                                        <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[300px] overflow-auto custom-scrollbar">
-    
-                                            {testResult.error ? (
-    
-                                                <div className="text-red-400 text-xs font-mono">
-    
-                                                    <span className="font-bold">Error:</span> {testResult.error}
-    
-                                                </div>
-    
-                                            ) : (
-    
-                                                <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
-    
-                                                    {JSON.stringify(testResult.result, null, 2)}
-    
-                                                </pre>
-    
-                                            )}
-    
-                                        </div>
-    
-                                    ) : showHtmlPreview ? (
-    
-                                        <div className="rounded-md border border-border/50 bg-muted/50 p-3 max-h-[300px] overflow-auto">
-    
-                                             <div className="flex justify-end mb-2">
-    
-                                                <Button size="sm" variant="ghost" onClick={() => setShowHtmlPreview(false)} className="h-5 text-[10px]">Close</Button>
-    
-                                            </div>
-    
-                                            <pre className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap">
-    
-                                                {htmlContent}
-    
-                                            </pre>
-    
-                                        </div>
-    
-                                    ) : (
-    
-                                        <div className="rounded-md border border-border/50 bg-muted/20 p-8 flex flex-col items-center justify-center text-muted-foreground/50">
-    
-                                            <Play className="size-8 mb-2 opacity-20" />
-    
-                                            <span className="text-xs">Run a test to see results</span>
-    
-                                        </div>
-    
-                                    )}
-    
-                                </div>
-    
-    
-    
-                                {/* Detail URL Test (restored) */}
-    
-                                {pageType === "list" && (
-    
-                                    <div className="space-y-4 pt-4 border-t border-border/40">
-    
-                                        <div className="flex items-center gap-2">
-    
-                                            <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-    
-                                            <Label className="text-xs font-semibold text-secondary-foreground uppercase tracking-wider">Detail Page Test</Label>
-    
-                                        </div>
-    
-                                        
-    
-                                        <div className="space-y-2">
-    
-                                            <Input
-    
-                                                placeholder="Paste detail URL..."
-    
-                                                value={detailUrl}
-    
-                                                onChange={(e) => setDetailUrl(e.target.value)}
-    
-                                                onKeyDown={(e) => e.key === "Enter" && handleTestDetail()}
-    
-                                                className="h-8 text-sm bg-muted/20"
-    
-                                            />
-    
-                                            <div className="grid grid-cols-2 gap-2">
-    
-                                                <Button
-    
-                                                    onClick={handlePreviewDetailHtml}
-    
-                                                    disabled={!detailUrl || previewingDetailHtml || !serverUrl}
-    
-                                                    variant="secondary"
-    
-                                                    size="sm"
-    
-                                                    className="text-xs h-7"
-    
-                                                >
-    
-                                                    {previewingDetailHtml ? <Loader2 className="size-3 animate-spin mr-1" /> : <Eye className="size-3 mr-1" />}
-    
-                                                    HTML
-    
-                                                </Button>
-    
-                                                <Button
-    
-                                                    onClick={handleTestDetail}
-    
-                                                    disabled={!detailUrl || !code || testingDetail || !serverUrl}
-    
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    className="text-xs h-7"
-    
-                                                >
-    
-                                                    {testingDetail ? <Loader2 className="size-3 animate-spin mr-1" /> : <Play className="size-3 mr-1" />}
-    
-                                                    Test Detail
-    
-                                                </Button>
-    
-                                            </div>
-    
-                                        </div>
-    
-    
-    
-                                        {/* Detail Results */}
-    
-                                        {(showDetailResult && detailResult) || showDetailHtmlPreview ? (
-    
-                                            <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[300px] overflow-auto custom-scrollbar relative">
-    
-                                                <Button 
-    
-                                                    size="sm" 
-    
-                                                    variant="ghost" 
-    
-                                                    onClick={() => { setShowDetailResult(false); setShowDetailHtmlPreview(false); }} 
-    
-                                                    className="absolute top-1 right-1 h-5 w-5 p-0 text-muted-foreground hover:text-white"
-    
-                                                >
-    
-                                                    ×
-    
-                                                </Button>
-    
-                                                {showDetailHtmlPreview ? (
-    
-                                                    <pre className="text-[10px] font-mono text-foreground/70 whitespace-pre-wrap">
-    
-                                                        {detailHtmlContent}
-    
-                                                    </pre>
-    
-                                                ) : detailResult?.error ? (
-    
-                                                    <div className="text-red-400 text-xs font-mono">
-    
-                                                        <span className="font-bold">Error:</span> {detailResult.error}
-    
-                                                    </div>
-    
-                                                ) : (
-    
-                                                    <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
-    
-                                                        {JSON.stringify(detailResult?.result, null, 2)}
-    
-                                                    </pre>
-    
-                                                )}
-    
-                                            </div>
-    
-                                        ) : null}
-    
-                                    </div>
-    
-                                )}
+                                                                <div className="space-y-2 pt-2 border-t border-border/40">
+                                    
+                                                                    <div className="flex items-center justify-between">
+                                                                        <Label className="text-xs font-medium text-muted-foreground">Console Output</Label>
+                                                                        {(showTestResult && testResult && !testResult.error) && (
+                                                                            <div className="flex gap-1 p-0.5 bg-muted/40 rounded border border-border/50">
+                                                                                <Button 
+                                                                                    size="sm" 
+                                                                                    variant={displayMode === "interactive" ? "secondary" : "ghost"} 
+                                                                                    onClick={() => setDisplayMode("interactive")}
+                                                                                    className="h-5 px-1.5 text-[9px]"
+                                                                                >
+                                                                                    Interactive
+                                                                                </Button>
+                                                                                <Button 
+                                                                                    size="sm" 
+                                                                                    variant={displayMode === "json" ? "secondary" : "ghost"} 
+                                                                                    onClick={() => setDisplayMode("json")}
+                                                                                    className="h-5 px-1.5 text-[9px]"
+                                                                                >
+                                                                                    JSON
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                    
+                                                                    
+                                    
+                                                                                                        {showTestResult && testResult ? (
+                                                                                                            <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[400px] overflow-auto custom-scrollbar">
+                                                                                                                {testResult.error ? (
+                                                                                                                    <div className="text-red-400 text-xs font-mono">
+                                                                                                                        <span className="font-bold">Error:</span> {testResult.error}
+                                                                                                                    </div>
+                                                                                                                ) : (
+                                                                                                                    <div className="space-y-4">
+                                                                                                                        {displayMode === "interactive" && testResult.result?.type === 'list' && Array.isArray(testResult.result.results) ? (
+                                                                                                                            <div className="space-y-1">
+                                                                                                                                <div className="text-[10px] text-emerald-500 mb-2 border-b border-emerald-500/20 pb-1">Click a result to test its Detail Page:</div>
+                                                                                                                                                                                            {testResult.result.results.map((res: any, idx: number) => (
+                                                                                                                                                                                                <div 
+                                                                                                                                                                                                    key={idx}
+                                                                                                                                                                                                    onClick={() => {
+                                                                                                                                                                                                        const result = res as any;
+                                                                                                                                                                                                        setDetailUrl(result.url);
+                                                                                                                                                                                                        setShowDetailResult(false);
+                                                                                                                                                                                                        setTimeout(() => document.getElementById('detail-test-area')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                                                                                                                                                                                                    }}
+                                                                                                                                
+                                                                                                                                        className="p-2 rounded hover:bg-emerald-500/10 cursor-pointer border border-transparent hover:border-emerald-500/30 transition-all group"
+                                                                                                                                    >
+                                                                                                                                        <div className="text-[11px] font-bold text-emerald-400 group-hover:text-emerald-300 truncate">{res.name}</div>
+                                                                                                                                        <div className="text-[9px] text-emerald-500/60 font-mono truncate">{res.url}</div>
+                                                                                                                                        <div className="flex gap-3 mt-1">
+                                                                                                                                            {res.seeds !== undefined && <span className="text-[9px] text-emerald-400/80">S: {res.seeds}</span>}
+                                                                                                                                            {res.leeches !== undefined && <span className="text-[9px] text-red-400/80">L: {res.leeches}</span>}
+                                                                                                                                            {res.size && <span className="text-[9px] text-blue-400/80">{res.size}</span>}
+                                                                                                                                        </div>
+                                                                                                                                    </div>
+                                                                                                                                ))}
+                                                                                                                            </div>
+                                                                                                                        ) : (
+                                                                                                                            <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
+                                                                                                                                {JSON.stringify(testResult.result, null, 2)}
+                                                                                                                            </pre>
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        ) : (
+                                                                        
+                                                                                                            <div className="rounded-md border border-border/50 bg-muted/20 p-8 flex flex-col items-center justify-center text-muted-foreground/50">
+                                                                        
+                                                                                                                <Play className="size-8 mb-2 opacity-20" />
+                                                                        
+                                                                                                                <span className="text-xs">Run a test to see results</span>
+                                                                        
+                                                                                                            </div>
+                                                                        
+                                                                                                        )}
+                                                                                                                                    </div>
+                                    
+                                    
+                                    
+                                                                {/* Detail URL Test (restored) */}
+                                    
+                                                                {pageType === "list" && (
+                                    
+                                                                    <div id="detail-test-area" className="space-y-4 pt-4 border-t border-border/40">
+                                    
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                                                                                <Label className="text-xs font-semibold text-secondary-foreground uppercase tracking-wider">Detail Page Test</Label>
+                                                                            </div>
+                                                                            {(showDetailResult && detailResult && !detailResult.error) && (
+                                                                                <div className="flex gap-1 p-0.5 bg-muted/40 rounded border border-border/50">
+                                                                                    <Button 
+                                                                                        size="sm" 
+                                                                                        variant={detailDisplayMode === "interactive" ? "secondary" : "ghost"} 
+                                                                                        onClick={() => setDetailDisplayMode("interactive")}
+                                                                                        className="h-5 px-1.5 text-[9px]"
+                                                                                    >
+                                                                                        Interactive
+                                                                                    </Button>
+                                                                                    <Button 
+                                                                                        size="sm" 
+                                                                                        variant={detailDisplayMode === "json" ? "secondary" : "ghost"} 
+                                                                                        onClick={() => setDetailDisplayMode("json")}
+                                                                                        className="h-5 px-1.5 text-[9px]"
+                                                                                    >
+                                                                                        JSON
+                                                                                    </Button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        
+                                    
+                                                                        <div className="space-y-2">
+                                    
+                                                                            <Input
+                                    
+                                                                                placeholder="Paste detail URL..."
+                                    
+                                                                                value={detailUrl}
+                                    
+                                                                                onChange={(e) => setDetailUrl(e.target.value)}
+                                    
+                                                                                onKeyDown={(e) => e.key === "Enter" && handleTestDetail()}
+                                    
+                                                                                className="h-8 text-sm bg-muted/20"
+                                    
+                                                                            />
+                                    
+                                                                            <div className="grid grid-cols-2 gap-2">
+                                    
+                                                                                <Button
+                                    
+                                                                                    onClick={handlePreviewDetailHtml}
+                                    
+                                                                                    disabled={!detailUrl || previewingDetailHtml || !serverUrl}
+                                    
+                                                                                    variant="secondary"
+                                    
+                                                                                    size="sm"
+                                    
+                                                                                    className="text-xs h-7"
+                                    
+                                                                                >
+                                    
+                                                                                    {previewingDetailHtml ? <Loader2 className="size-3 animate-spin mr-1" /> : <Eye className="size-3 mr-1" />}
+                                                                                    HTML
+                                    
+                                                                                </Button>
+                                    
+                                                                                <Button
+                                    
+                                                                                    onClick={handleTestDetail}
+                                    
+                                                                                    disabled={!detailUrl || !code || testingDetail || !serverUrl}
+                                    
+                                                                                    size="sm"
+                                                                                    variant="secondary"
+                                                                                    className="text-xs h-7"
+                                    
+                                                                                >
+                                    
+                                                                                    {testingDetail ? <Loader2 className="size-3 animate-spin mr-1" /> : <Play className="size-3 mr-1" />}
+                                                                                    Test Detail
+                                    
+                                                                                </Button>
+                                    
+                                                                            </div>
+                                    
+                                                                        </div>
+                                    
+                                    
+                                    
+                                                                                                                {/* Detail Results */}
+                                                                            
+                                                                                                                {(showDetailResult && detailResult) ? (
+                                                                            
+                                                                                                                    <div className="rounded-md border border-border/50 bg-black/90 p-3 max-h-[400px] overflow-auto custom-scrollbar relative">
+                                                                            
+                                                                                                                        <div className="flex justify-between items-center mb-2 sticky top-0 bg-black/80 backdrop-blur-sm p-1 rounded z-10">
+                                                                                                                            <div className="text-[9px] text-muted-foreground font-mono">DETAIL OUTPUT</div>
+                                                                                                                            <Button 
+                                                                                                                                size="sm" 
+                                                                                                                                variant="ghost" 
+                                                                                                                                onClick={() => { setShowDetailResult(false); }} 
+                                                                                                                                className="h-5 w-5 p-0 text-muted-foreground hover:text-white"
+                                                                                                                            >
+                                                                                                                                ×
+                                                                                                                            </Button>
+                                                                                                                        </div>
+                                                                            
+                                                                                                                                                                        {detailResult?.error ? (
+                                                                                                                            
+                                                                                                                                                                            <div className="text-red-400 text-xs font-mono">
+                                                                                                                            
+                                                                                                                                                                                <span className="font-bold">Error:</span> {detailResult.error}
+                                                                                                                            
+                                                                                                                                                                            </div>
+                                                                                                                            
+                                                                                                                                                                        ) : (
+                                                                                                                                                                            <div className="space-y-4">
+                                                                                                                                                                                {detailDisplayMode === "interactive" && (detailResult?.result as any)?.magnetLink ? (
+                                                                                                                                                                                    <div className="space-y-3 p-1">
+                                                                                                                                                                                        <div className="space-y-1">
+                                                                                                                                                                                            <div className="text-[10px] text-emerald-500/70 font-bold uppercase tracking-wider">Magnet Link Found:</div>
+                                                                                                                                                                                            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] font-mono text-emerald-400 break-all select-all">
+                                                                                                                                                                                                {(detailResult?.result as any).magnetLink}
+                                                                                                                                                                                            </div>
+                                                                                                                                                                                        </div>
+                                                                                                                                                                                        
+                                                                                                                                                                                        {Array.isArray((detailResult?.result as any).directDownloads) && (detailResult?.result as any).directDownloads.length > 0 && (
+                                                                                                                                                                                            <div className="space-y-1">
+                                                                                                                                                                                                <div className="text-[10px] text-blue-500/70 font-bold uppercase tracking-wider">Direct Downloads:</div>
+                                                                                                                                                                                                <div className="space-y-1">
+                                                                                                                                                                                                    {(detailResult?.result as any).directDownloads.map((dl: any, idx: number) => (
+                                                                                                                                                                                                        <div key={idx} className="p-1.5 bg-blue-500/10 border border-blue-500/20 rounded flex justify-between items-center gap-2">
+                                                                                                                                                                                                            <span className="text-[10px] text-blue-400 truncate">{dl.text || 'Download'}</span>
+                                                                                                                                                                                                            <span className="text-[9px] text-blue-500/60 font-mono truncate max-w-[150px]">{dl.url}</span>
+                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                    ))}
+                                                                                                                                                                                                </div>
+                                                                                                                                                                                            </div>
+                                                                                                                                                                                        )}
+                                                                                                                                                                                    </div>
+                                                                                                                                                                                ) : (
+                                                                                                                                                                                    <pre className="text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
+                                                                                                                                                                                        {JSON.stringify(detailResult?.result, null, 2)}
+                                                                                                                                                                                    </pre>
+                                                                                                                                                                                )}
+                                                                                                                                                                            </div>
+                                                                                                                                                                        )}
+                                                                                                                        
+                                                                                                                    </div>
+                                                                                                                ) : null}
+                                                                                                            
+                                                                    </div>
+                                    
+                                                                )}
+                                
     
                             </CardContent>
     
@@ -1011,53 +999,51 @@ export function CustomProviderEditorPage() {
     
     
     
-                        {/* Quick Help */}
-    
-                        <Card className="border-border/50 shadow-sm bg-muted/10">
-    
-                            <CardContent className="pt-6">
-    
-                                 <div className="flex items-center gap-2 mb-4">
-    
-                                    <Code2 className="size-4 text-primary" />
-    
-                                    <h3 className="font-semibold text-sm">Quick Reference</h3>
-    
-                                </div>
-    
-                                <div className="space-y-3 text-xs">
-    
-                                    <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
-    
-                                        <code className="text-primary font-bold block mb-1">ARG_FULL_URL</code>
-    
-                                        <p className="text-muted-foreground leading-relaxed">Contains the fully constructed URL with query parameters.</p>
-    
+                                                {/* Quick Help */}
+                            
+                                                <Card className="border-border/50 shadow-sm bg-muted/10">
+                            
+                                                    <CardContent className="pt-6">
+                            
+                                                         <div className="flex items-center gap-2 mb-4">
+                            
+                                                            <Code2 className="size-4 text-primary" />
+                            
+                                                            <h3 className="font-semibold text-sm">Quick Reference</h3>
+                            
+                                                        </div>
+                            
+                                                        <div className="space-y-3 text-xs">
+                            
+                                                            <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
+                            
+                                                                <code className="text-primary font-bold block mb-1">ARG_FULL_URL</code>
+                            
+                                                                <p className="text-muted-foreground leading-relaxed">Contains the fully constructed URL with query parameters.</p>
+                            
+                                                            </div>
+                            
+                                                            <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
+                            
+                                                                <code className="text-primary font-bold block mb-1">return {'{...}'}</code>
+                            
+                                                                <p className="text-muted-foreground leading-relaxed">
+                            
+                                                                    Must return an object with <code className="bg-muted px-1 rounded">type: 'list'</code> or <code className="bg-muted px-1 rounded">type: 'detail'</code>.
+                            
+                                                                </p>
+                            
+                                                            </div>
+                            
+                                                        </div>
+                            
+                                                    </CardContent>
+                            
+                                                </Card>
+                                            </div>
+                                        </div>
                                     </div>
-    
-                                    <div className="p-2.5 bg-background rounded border border-border/50 shadow-sm">
-    
-                                        <code className="text-primary font-bold block mb-1">return {'{...}'}</code>
-    
-                                        <p className="text-muted-foreground leading-relaxed">
-    
-                                            Must return an object with <code className="bg-muted px-1 rounded">type: 'list'</code> or <code className="bg-muted px-1 rounded">type: 'detail'</code>.
-    
-                                        </p>
-    
-                                    </div>
-    
-                                </div>
-    
-                            </CardContent>
-    
-                        </Card>
-    
-                    </div>
-    
-                </div>
-    
-            </div>
+                        
     
         );
     

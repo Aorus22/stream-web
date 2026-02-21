@@ -7,10 +7,27 @@ export function FullHtmlPreviewPage() {
     const { encodedHtml } = useParams<{ encodedHtml?: string }>();
     const navigate = useNavigate();
 
-    // Decode the HTML from URL
-    const decodedHtml = encodedHtml
-        ? decodeURIComponent(atob(encodedHtml || ""))
-        : "<html><body><p>No HTML content</p></body></html>";
+    // Decode the HTML from URL or sessionStorage
+    let decodedHtml = "<html><body><p>No HTML content</p></body></html>";
+    if (encodedHtml === "session") {
+        const storedHtml = sessionStorage.getItem('pending_html_preview');
+        if (storedHtml) {
+            decodedHtml = storedHtml;
+        } else {
+            decodedHtml = "<html><body><p>Session-stored HTML expired or not found. Please try again.</p></body></html>";
+        }
+    } else if (encodedHtml) {
+        try {
+            decodedHtml = decodeURIComponent(escape(atob(encodedHtml)));
+        } catch (e) {
+            console.error("Decoding error:", e);
+            try {
+                decodedHtml = atob(encodedHtml);
+            } catch (e2) {
+                decodedHtml = `<html><body><p>Error decoding HTML: ${(e2 as Error).message}</p></body></html>`;
+            }
+        }
+    }
 
     const handleDownload = () => {
         const blob = new Blob([decodedHtml], { type: "text/html" });
