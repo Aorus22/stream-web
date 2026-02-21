@@ -42,4 +42,12 @@ export type TorrentResult = {
     category: string;
     uploadedBy: string;
     dateUploaded: string;
+    url?: string;
+};
+
+export type ProviderInfo = {
+    id: string;
+    name: string;
+    type: "embedded" | "custom";
+    pageType: "list" | "detail";
 };

@@ -5,6 +5,9 @@ import Search from '../pages/Search/Page';
 import Browse from '../pages/Browser/Page';
 import MediaDetail from '../pages/MediaDetail/Page';
 import ServerLogin from '../pages/ServerLogin/Page';
+import { CustomProviderListPage } from '../pages/CustomProvider/ListPage';
+import { CustomProviderEditorPage } from '../pages/CustomProvider/EditorPage';
+import FullHtmlPreviewPage from '../pages/CustomProvider/FullHtmlPreview';
 import { ProtectedRoute, LayoutWrapper } from './RouteWrappers';
 
 export const router = createBrowserRouter([
@@ -17,6 +20,14 @@ export const router = createBrowserRouter([
         element: (
             <ProtectedRoute>
                 <VideoPlayer />
+            </ProtectedRoute>
+        ),
+    },
+    {
+        path: '/custom-provider/preview/:encodedHtml',
+        element: (
+            <ProtectedRoute>
+                <FullHtmlPreviewPage />
             </ProtectedRoute>
         ),
     },
@@ -39,6 +50,18 @@ export const router = createBrowserRouter([
             {
                 path: 'search',
                 element: <Search />,
+            },
+            {
+                path: 'custom-provider',
+                element: <CustomProviderListPage />,
+            },
+            {
+                path: 'custom-provider/new',
+                element: <CustomProviderEditorPage />,
+            },
+            {
+                path: 'custom-provider/edit/:id',
+                element: <CustomProviderEditorPage />,
             },
             {
                 path: 'browse',

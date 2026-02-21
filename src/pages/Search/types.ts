@@ -15,8 +15,15 @@ export type SearchResult = {
   url: string;
 };
 
+export type ProviderInfo = {
+  id: string;
+  name: string;
+  type: "embedded" | "custom";
+  pageType: "list" | "detail";
+};
+
 export type ProviderSelectProps = {
-  providers: string[];
+  providers: ProviderInfo[];
   selected: string;
   onChange: (value: string) => void;
 };

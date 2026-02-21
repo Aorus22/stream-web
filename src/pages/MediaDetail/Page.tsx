@@ -11,7 +11,7 @@ import EpisodePanel from "./EpisodePanel";
 import TorrentPanel from "./TorrentPanel";
 import CastSection from "./CastSection";
 import CrewSection from "./CrewSection";
-import type { MediaInfo, TorrentResult, EpisodeInfo } from "./types";
+import type { MediaInfo, TorrentResult, EpisodeInfo, ProviderInfo } from "./types";
 
 export function MediaDetail() {
     const { serverUrl } = useServer();
@@ -19,19 +19,19 @@ export function MediaDetail() {
     const location = useLocation();
     const type = location.pathname.split('/')[1];
 
-    const [detail, setDetail] = useState<MediaInfo | null>(null);
+const [detail, setDetail] = useState<MediaInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selectedSeason, setSelectedSeason] = useState(1);
     const [showTorrentPanel, setShowTorrentPanel] = useState(false);
     const [torrentQuery, setTorrentQuery] = useState("");
-    const [providers, setProviders] = useState<string[]>([]);
+    const [providers, setProviders] = useState<ProviderInfo[]>([]);
     const [selectedProvider, setSelectedProvider] = useState("");
     const [torrentResults, setTorrentResults] = useState<TorrentResult[]>([]);
     const [searchingTorrents, setSearchingTorrents] = useState(false);
     const [addingTorrent, setAddingTorrent] = useState<string | null>(null);
     const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
-const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null);
+    const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null);
 
     const handleShare = useCallback(async () => {
         if (typeof window === "undefined") return;
@@ -106,7 +106,7 @@ const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null)
             .sort((a, b) => a.episode - b.episode);
     }, [detail?.episodes, selectedSeason]);
 
-    const searchTorrents = async (query?: string, episode?: EpisodeInfo, providerOverride?: string) => {
+const searchTorrents = async (query?: string, episode?: EpisodeInfo, providerOverride?: string) => {
         if (!detail || !serverUrl) return;
         const searchQuery = query || (detail.mediaType === "series"
             ? `${detail.title} S${String(selectedSeason).padStart(2, '0')}`
@@ -116,9 +116,9 @@ const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null)
         setSelectedEpisode(episode || null);
         setShowTorrentPanel(true);
 
-        const providerToUse = providerOverride || selectedProvider;
+        const providerId = providerOverride || selectedProvider;
 
-        if (!providerToUse) {
+        if (!providerId) {
             setSearchingTorrents(false);
             setTorrentResults([]);
             return;
@@ -128,14 +128,87 @@ const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null)
         setTorrentResults([]);
 
         try {
-            const res = await fetch(
-                `${serverUrl}/api/search?provider=${providerToUse}&query=${encodeURIComponent(searchQuery.trim())}`
-            );
-            const data = await res.json();
-            setTorrentResults(Array.isArray(data) ? data : []);
+            const provider = providers.find(p => p.id === providerId);
+            
+            if (provider?.type === "custom") {
+                const res = await fetch(
+                    `${serverUrl}/api/search/custom/${providerId}?query=${encodeURIComponent(searchQuery.trim())}`
+                );
+                const data = await res.json();
+                
+                if (data.result?.type === 'list' && data.result?.results) {
+                    const listResults = data.result.results.map((item: { name: string; url: string; size?: string; seeds?: number; leeches?: number }) => ({
+                        name: item.name,
+                        magnet: '',
+                        size: item.size || 'Unknown',
+                        seeders: String(item.seeds || 0),
+                        leechers: String(item.leeches || 0),
+                        category: '',
+                        uploadedBy: '',
+                        dateUploaded: '',
+                        url: item.url,
+                    }));
+                    setTorrentResults(listResults);
+                } else if (data.result?.type === 'detail') {
+                    const detailResult: TorrentResult = {
+                        name: data.result.name || searchQuery,
+                        magnet: data.result.magnetLink || '',
+                        size: '',
+                        seeders: '0',
+                        leechers: '0',
+                        category: '',
+                        uploadedBy: '',
+                        dateUploaded: '',
+                    };
+                    setTorrentResults([detailResult]);
+                } else {
+                    setTorrentResults([]);
+                }
+            } else {
+                const res = await fetch(
+                    `${serverUrl}/api/search?provider=${providerId}&query=${encodeURIComponent(searchQuery.trim())}`
+                );
+                const data = await res.json();
+                setTorrentResults(Array.isArray(data) ? data : []);
+            }
         } catch (err) {
             console.error("Failed to search torrents:", err);
             setTorrentResults([]);
+        } finally {
+            setSearchingTorrents(false);
+        }
+    };
+
+    const fetchDetailFromUrl = async (url: string) => {
+        if (!serverUrl || !selectedProvider) return;
+        
+        const provider = providers.find(p => p.id === selectedProvider);
+        if (provider?.type !== "custom") return;
+
+        setSearchingTorrents(true);
+        try {
+            const res = await fetch(
+                `${serverUrl}/api/search/custom/${selectedProvider}?detailUrl=${encodeURIComponent(url)}`
+            );
+            const data = await res.json();
+            
+            if (data.result?.type === 'detail') {
+                const detailResult: TorrentResult = {
+                    name: data.result.name || 'Unknown',
+                    magnet: data.result.magnetLink || '',
+                    size: '',
+                    seeders: '0',
+                    leechers: '0',
+                    category: '',
+                    uploadedBy: '',
+                    dateUploaded: '',
+                };
+                setTorrentResults(prev => 
+                    prev.map(item => item.url === url ? { ...item, magnet: detailResult.magnet } : item)
+                );
+            }
+        } catch (err) {
+            console.error("Failed to fetch detail:", err);
         } finally {
             setSearchingTorrents(false);
         }
@@ -279,7 +352,7 @@ const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null)
                 </div>
             </div>
 
-            <TorrentPanel
+<TorrentPanel
                 detail={detail}
                 show={showTorrentPanel}
                 onClose={() => setShowTorrentPanel(false)}
@@ -296,6 +369,7 @@ const [selectedEpisode, setSelectedEpisode] = useState<EpisodeInfo | null>(null)
                 addTorrent={addTorrent}
                 copiedMagnet={copiedMagnet}
                 selectedEpisode={selectedEpisode}
+                fetchDetailFromUrl={fetchDetailFromUrl}
             />
         </div>
     );

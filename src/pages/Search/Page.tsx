@@ -5,12 +5,12 @@ import { useServer } from "@/contexts/ServerContext";
 import SearchHeader from "./Header";
 import SearchForm from "./Form";
 import ResultCard from "./ResultCard";
-import type { SearchResult } from "./types";
+import type { SearchResult, ProviderInfo } from "./types";
 
 export function Search() {
     const { serverUrl } = useServer();
     const [searchParams] = useSearchParams();
-    const [providers, setProviders] = useState<string[]>([]);
+    const [providers, setProviders] = useState<ProviderInfo[]>([]);
     const [selectedProvider, setSelectedProvider] = useState("");
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -31,7 +31,8 @@ export function Search() {
             .then(res => res.json())
             .then(data => {
                 setProviders(data || []);
-                const providerToUse = savedProvider && (data || []).includes(savedProvider) ? savedProvider : (data && data.length > 0 ? data[0] : "");
+                const providerIds = (data || []).map((p: ProviderInfo) => p.id);
+                const providerToUse = savedProvider && providerIds.includes(savedProvider) ? savedProvider : (data && data.length > 0 ? data[0].id : "");
                 setSelectedProvider(providerToUse);
 
                 if (urlQuery) {
@@ -79,20 +80,95 @@ export function Search() {
         setLoading(true);
         setResults([]);
         try {
-            const res = await fetch(`${serverUrl}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(query)}`);
-            const data = await res.json();
+            const provider = providers.find(p => p.id === selectedProvider);
+            
+            if (provider?.type === "custom") {
+                const res = await fetch(`${serverUrl}/api/search/custom/${selectedProvider}?query=${encodeURIComponent(query)}`);
+                const data = await res.json();
 
-            if (Array.isArray(data)) {
-                setResults(data);
+                if (data.result?.type === 'list' && data.result?.results) {
+                    const listResults: SearchResult[] = data.result.results.map((item: { name: string; url: string; size?: string; seeds?: number; leeches?: number }) => ({
+                        name: item.name,
+                        magnet: '',
+                        poster: '',
+                        category: '',
+                        type: '',
+                        language: '',
+                        size: item.size || 'Unknown',
+                        uploadedBy: '',
+                        downloads: '',
+                        lastChecked: '',
+                        dateUploaded: '',
+                        seeders: String(item.seeds || 0),
+                        leechers: String(item.leeches || 0),
+                        url: item.url,
+                    }));
+                    setResults(listResults);
+                } else if (data.result?.type === 'detail') {
+                    const detailResult: SearchResult = {
+                        name: data.result.name || query,
+                        magnet: data.result.magnetLink || '',
+                        poster: '',
+                        category: '',
+                        type: '',
+                        language: '',
+                        size: '',
+                        uploadedBy: '',
+                        downloads: '',
+                        lastChecked: '',
+                        dateUploaded: '',
+                        seeders: '0',
+                        leechers: '0',
+                        url: '',
+                    };
+                    setResults([detailResult]);
+                } else {
+                    setResults([]);
+                }
             } else {
-                console.error("Search API returned non-array:", data);
-                setResults([]);
+                const res = await fetch(`${serverUrl}/api/search?provider=${selectedProvider}&query=${encodeURIComponent(query)}`);
+                const data = await res.json();
+
+                if (Array.isArray(data)) {
+                    setResults(data);
+                } else {
+                    console.error("Search API returned non-array:", data);
+                    setResults([]);
+                }
             }
         } catch (err) {
             console.error(err);
             setResults([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+const fetchDetailFromUrl = async (url: string, resultName: string) => {
+        if (!serverUrl || !selectedProvider) return;
+        
+        const provider = providers.find(p => p.id === selectedProvider);
+        if (provider?.type !== "custom") return;
+
+        setLoadingDetailUrl(url);
+        try {
+            const res = await fetch(
+                `${serverUrl}/api/search/custom/${selectedProvider}?detailUrl=${encodeURIComponent(url)}`
+            );
+            const data = await res.json();
+
+            if (data.result?.type === 'detail') {
+                setResults(prev =>
+                    prev.map(item => item.url === url ? {
+                        ...item,
+                        magnet: data.result.magnetLink || ''
+                    } : item)
+                );
+            }
+        } catch (err) {
+            console.error("Failed to fetch detail:", err);
+        } finally {
+            setLoadingDetailUrl(null);
         }
     };
 
@@ -142,9 +218,9 @@ export function Search() {
                 </Card>
 
                 <div className="grid gap-4">
-                    {results.map((result) => (
+                    {results.map((result, index) => (
                         <ResultCard
-                            key={result.magnet}
+                            key={result.magnet || index}
                             result={result}
                             addingMagnet={adding}
                             onAdd={addTorrent}

@@ -15,6 +15,7 @@ type ResultCardProps = {
 export default function ResultCard({ result, addingMagnet, onAdd, onCopy, copiedMagnet }: ResultCardProps) {
   const isAdding = addingMagnet === result.magnet;
   const isCopied = copiedMagnet === result.magnet;
+  const hasMagnet = !!result.magnet;
 
   return (
     <Card className="border">
@@ -30,52 +31,55 @@ export default function ResultCard({ result, addingMagnet, onAdd, onCopy, copied
               <Users className="h-3 w-3" />
               {result.seeders} / {result.leechers}
             </Badge>
-            <Badge variant="outline" className="gap-1">
-              <Database className="h-3 w-3" />
-              {result.category}
-            </Badge>
+            {result.category && (
+              <Badge variant="outline" className="gap-1">
+                <Database className="h-3 w-3" />
+                {result.category}
+              </Badge>
+            )}
           </div>
-          <CardDescription className="text-xs">
-            Uploaded by {result.uploadedBy} on {result.dateUploaded}
-          </CardDescription>
+          {result.uploadedBy && result.dateUploaded && (
+            <CardDescription className="text-xs">
+              Uploaded by {result.uploadedBy} on {result.dateUploaded}
+            </CardDescription>
+          )}
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onCopy(result.magnet)}
-            className="gap-1"
-          >
-            {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            <span className="hidden sm:inline">{isCopied ? "Copied" : "Copy"}</span>
-          </Button>
-          <Button
-            size="sm"
-            disabled={isAdding}
-            onClick={() => onAdd(result.magnet)}
-            className="gap-1"
-          >
-            {isAdding ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            <span className="hidden sm:inline">Add</span>
-          </Button>
-        </div>
+        {hasMagnet && (
+          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCopy(result.magnet)}
+              className="gap-1"
+            >
+              {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isCopied ? "Copied" : "Copy"}</span>
+            </Button>
+            <Button
+              size="sm"
+              disabled={isAdding}
+              onClick={() => onAdd(result.magnet)}
+              className="gap-1"
+            >
+              {isAdding ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Add</span>
+            </Button>
+          </div>
+        )}
       </CardHeader>
-      <CardContent className="pt-0 text-xs text-muted-foreground">
-        <div className="flex flex-wrap gap-3">
-          <span>Provider: {result.type}</span>
-          <span>Language: {result.language}</span>
-          <span>{result.size}</span>
-        </div>
-        <div className="flex flex-wrap gap-3 mt-2 text-[10px]">
-          <span>Last Checked: {result.lastChecked}</span>
-          <span>Downloads: {result.downloads}</span>
-        </div>
-      </CardContent>
+      {(result.type || result.language) && (
+        <CardContent className="pt-0 text-xs text-muted-foreground">
+          <div className="flex flex-wrap gap-3">
+            {result.type && <span>Provider: {result.type}</span>}
+            {result.language && <span>Language: {result.language}</span>}
+          </div>
+        </CardContent>
+      )}
     </Card>
   );
 }

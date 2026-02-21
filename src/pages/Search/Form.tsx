@@ -3,9 +3,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Loader2, Search as SearchIcon } from "lucide-react";
 import type { FormEvent } from "react";
+import type { ProviderInfo } from "./types";
 
 type SearchFormProps = {
-  providers: string[];
+  providers: ProviderInfo[];
   selectedProvider: string;
   onProviderChange: (value: string) => void;
   query: string;
@@ -31,7 +32,9 @@ export default function SearchForm({
         </SelectTrigger>
         <SelectContent>
           {providers.map(p => (
-            <SelectItem key={p} value={p}>{p}</SelectItem>
+            <SelectItem key={p.id} value={p.id}>
+              {p.name}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
