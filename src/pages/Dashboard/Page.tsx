@@ -144,10 +144,14 @@ export function Dashboard() {
         reencodeSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log("Reencode SSE update:", data);
                 setReencodeJobs(data || []);
             } catch (err) {
                 console.error("Failed to parse reencode SSE:", err);
             }
+        };
+        reencodeSource.onerror = (err) => {
+            console.error("Reencode SSE connection error:", err);
         };
 
         return () => {
@@ -417,6 +421,21 @@ export function Dashboard() {
                     </TabsList>
 
                     <TabsContent value="transfers" className="space-y-8 mt-0 outline-none">
+                        {/* Reencode Jobs Section */}
+                        {reencodeJobs.length > 0 && (
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw className="size-5 text-primary" />
+                                    <h2 className="text-xl font-bold">Reencoding Tasks</h2>
+                                </div>
+                                <div className="grid gap-3">
+                                    {reencodeJobs.map((job) => (
+                                        <ReencodeProgressCard key={job.id} job={job} />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
                         {/* Torrents Section */}
                         <section className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -488,21 +507,6 @@ export function Dashboard() {
                                 </div>
                             )}
                         </section>
-
-                        {/* Reencode Jobs Section */}
-                        {reencodeJobs.length > 0 && (
-                            <section className="space-y-4">
-                                <div className="flex items-center gap-2">
-                                    <RefreshCw className="size-5 text-primary/70" />
-                                    <h2 className="text-xl font-bold">Reencoding Tasks</h2>
-                                </div>
-                                <div className="grid gap-3">
-                                    {reencodeJobs.map((job) => (
-                                        <ReencodeProgressCard key={job.id} job={job} />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
                     </TabsContent>
 
                     <TabsContent value="library" className="space-y-8 mt-0 outline-none">

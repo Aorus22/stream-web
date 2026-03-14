@@ -48,12 +48,12 @@ export default function ReencodeProgressCard({ job }: Props) {
                     
                     <div className="flex flex-col items-end gap-3">
                         <div className="text-2xl font-black tracking-tighter tabular-nums text-primary">
-                            {job.progress.percent.toFixed(1)}%
+                            {(job.progress?.percent || 0).toFixed(1)}%
                         </div>
                     </div>
                 </div>
                 {!isCompleted && !isFailed && (
-                    <Progress value={job.progress.percent} className="h-1.5 mt-4 bg-muted" />
+                    <Progress value={job.progress?.percent || 0} className="h-1.5 mt-4 bg-muted" />
                 )}
             </CardContent>
         </Card>
