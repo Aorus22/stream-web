@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Play, FileVideo, HardDrive, Download } from "lucide-react";
-import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
 import type { DirectDownload } from "./types";
@@ -16,11 +15,10 @@ type Props = {
 
 export default function DirectDownloadCard({ download }: Props) {
     const { serverUrl } = useServer();
-    const live = useDownloadProgress(download.id);
-    const progress = live?.progress ?? download.progress ?? 0;
-    const downloadedBytes = live?.downloadedBytes ?? download.downloadedBytes ?? 0;
-    const totalBytes = live?.totalBytes ?? download.totalBytes ?? 0;
-    const status = (live?.status ?? download.status) as DirectDownload["status"];
+    const progress = download.progress ?? 0;
+    const downloadedBytes = download.downloadedBytes ?? 0;
+    const totalBytes = download.totalBytes ?? 0;
+    const status = download.status as DirectDownload["status"];
 
     const isCompleted = status === "completed" || status === "on_demand";
 

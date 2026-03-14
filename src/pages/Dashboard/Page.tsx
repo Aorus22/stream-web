@@ -102,7 +102,34 @@ export function Dashboard() {
             setIsInitialLoading(false);
         };
         init();
-    }, [fetchTorrents, fetchCachedFiles, fetchDirectDownloads]);
+
+        // SSE for Torrents
+        const torrentsSource = new EventSource(`${serverUrl}/api/torrents/stream`);
+        torrentsSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                setTorrents(data || []);
+            } catch (err) {
+                console.error("Failed to parse torrent SSE:", err);
+            }
+        };
+
+        // SSE for Direct Downloads
+        const directSource = new EventSource(`${serverUrl}/api/direct/stream`);
+        directSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                setDirectDownloads(data || []);
+            } catch (err) {
+                console.error("Failed to parse direct download SSE:", err);
+            }
+        };
+
+        return () => {
+            torrentsSource.close();
+            directSource.close();
+        };
+    }, [serverUrl, fetchTorrents, fetchCachedFiles, fetchDirectDownloads]);
 
     const addMagnet = async (e: React.FormEvent) => {
         e.preventDefault();
