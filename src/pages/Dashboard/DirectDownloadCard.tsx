@@ -2,8 +2,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Play, FileVideo, HardDrive } from "lucide-react";
+import { Play, FileVideo, HardDrive, Download } from "lucide-react";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useServer } from "@/contexts/ServerContext";
 import type { DirectDownload } from "./types";
 import { formatBytes } from "./utils";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,7 @@ type Props = {
 };
 
 export default function DirectDownloadCard({ download }: Props) {
+    const { serverUrl } = useServer();
     const live = useDownloadProgress(download.id);
     const progress = live?.progress ?? download.progress ?? 0;
     const downloadedBytes = live?.downloadedBytes ?? download.downloadedBytes ?? 0;
@@ -20,6 +23,11 @@ export default function DirectDownloadCard({ download }: Props) {
     const status = (live?.status ?? download.status) as DirectDownload["status"];
 
     const isCompleted = status === "completed" || status === "on_demand";
+
+    const downloadFile = () => {
+        if (!serverUrl) return;
+        window.open(`${serverUrl}/stream/direct/${download.id}?download=true`, '_blank');
+    };
 
     return (
         <Card className="overflow-hidden border-2 hover:border-primary/20 transition-all duration-300">
@@ -57,14 +65,35 @@ export default function DirectDownloadCard({ download }: Props) {
                             {progress.toFixed(1)}%
                         </div>
                         {isCompleted && (
-                            <Button
-                                size="sm"
-                                onClick={() => window.location.href = `/watch?directId=${download.id}`}
-                                className="h-8 gap-2 px-4 font-bold shadow-lg shadow-primary/20"
-                            >
-                                <Play className="size-3 fill-current" />
-                                Play
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="secondary"
+                                            size="icon"
+                                            onClick={downloadFile}
+                                            className="size-8"
+                                            disabled={!serverUrl}
+                                        >
+                                            <Download className="size-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Download</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            size="icon"
+                                            onClick={() => window.location.href = `/watch?directId=${download.id}`}
+                                            className="size-8 shadow-lg shadow-primary/20"
+                                        >
+                                            <Play className="size-3.5 fill-current" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Play</TooltipContent>
+                                </Tooltip>
+                            </div>
                         )}
                     </div>
                 </div>

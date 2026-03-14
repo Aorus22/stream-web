@@ -2,7 +2,7 @@ import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Copy, Trash2, FileVideo, Folder } from "lucide-react";
+import { Copy, Trash2, FileVideo, Folder, Play, Download } from "lucide-react";
 import type { CachedFile } from "./types";
 import { formatBytes } from "./utils";
 
@@ -19,6 +19,11 @@ export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, ser
     const copyStreamUrl = (fileIndex: number) => {
         if (!serverUrl) return;
         onCopy(`${serverUrl}/stream/${infoHash}/${fileIndex}`);
+    };
+
+    const downloadFile = (fileIndex: number) => {
+        if (!serverUrl) return;
+        window.open(`${serverUrl}/stream/${infoHash}/${fileIndex}?download=true`, '_blank');
     };
 
     return (
@@ -77,7 +82,7 @@ export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, ser
                                     <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">{formatBytes(file.size || 0)}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 ml-4">
+                            <div className="flex items-center gap-1.5 ml-4">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button
@@ -92,15 +97,36 @@ export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, ser
                                     </TooltipTrigger>
                                     <TooltipContent>Copy Stream URL</TooltipContent>
                                 </Tooltip>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    disabled={!file.canPlay || !file.downloadId}
-                                    onClick={() => window.location.href = `/watch?directId=${file.downloadId}`}
-                                    className="h-8 gap-1.5 px-3 font-bold"
-                                >
-                                    Play
-                                </Button>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-8 opacity-0 group-hover/file:opacity-100"
+                                            onClick={() => downloadFile(file.fileIndex ?? 0)}
+                                            disabled={!serverUrl}
+                                        >
+                                            <Download className="size-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Download</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            size="icon"
+                                            variant="secondary"
+                                            disabled={!file.canPlay || !file.downloadId}
+                                            onClick={() => window.location.href = `/watch?directId=${file.downloadId}`}
+                                            className="size-8 shadow-sm"
+                                        >
+                                            <Play className="size-3.5 fill-current" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Play</TooltipContent>
+                                </Tooltip>
                             </div>
                         </div>
                     ))}

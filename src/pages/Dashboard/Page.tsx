@@ -19,7 +19,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
 import DirectDownloadCard from "./DirectDownloadCard";
 import TorrentCard from "./TorrentCard";
@@ -490,15 +490,34 @@ export function Dashboard() {
                                                             <span>{formatBytes(file.size || 0)}</span>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Button 
-                                                            size="sm" 
-                                                            className="gap-2"
-                                                            onClick={() => window.location.href = `/watch?directId=${file.downloadId}`}
-                                                        >
-                                                            <Play className="size-3 fill-current" />
-                                                            Play
-                                                        </Button>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    size="icon"
+                                                                    className="size-8"
+                                                                    onClick={() => window.open(`${serverUrl}/stream/direct/${file.downloadId}?download=true`, '_blank')}
+                                                                    disabled={!serverUrl}
+                                                                >
+                                                                    <Download className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Download</TooltipContent>
+                                                        </Tooltip>
+
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button 
+                                                                    size="icon" 
+                                                                    className="size-8"
+                                                                    onClick={() => window.location.href = `/watch?directId=${file.downloadId}`}
+                                                                >
+                                                                    <Play className="size-3.5 fill-current" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Play</TooltipContent>
+                                                        </Tooltip>
                                                     </div>
                                                 </div>
                                             </CardContent>

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Play, Copy, Trash2, Zap, Users, FileVideo, HardDrive } from "lucide-react";
+import { Play, Copy, Trash2, Zap, Users, FileVideo, HardDrive, Download, DownloadCloud } from "lucide-react";
 import type { Torrent } from "./types";
 import { formatBytes } from "./utils";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,11 @@ export default function TorrentCard({ torrent, serverUrl, onCopy, onRemove }: Pr
     const copyStreamUrl = (index: number) => {
         if (!serverUrl) return;
         onCopy(`${serverUrl}/stream/${torrent.infoHash}/${index}`);
+    };
+
+    const downloadFile = (index: number) => {
+        if (!serverUrl) return;
+        window.open(`${serverUrl}/stream/${torrent.infoHash}/${index}?download=true`, '_blank');
     };
 
     const isCompleted = torrent.progress >= 100;
@@ -119,7 +124,7 @@ export default function TorrentCard({ torrent, serverUrl, onCopy, onRemove }: Pr
                             </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex items-center gap-1.5 ml-4">
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => copyStreamUrl(i)}>
@@ -128,15 +133,40 @@ export default function TorrentCard({ torrent, serverUrl, onCopy, onRemove }: Pr
                                 </TooltipTrigger>
                                 <TooltipContent>Stream URL</TooltipContent>
                             </Tooltip>
-                            <Button
-                                size="sm"
-                                variant={file.progress > 0 ? "default" : "secondary"}
-                                onClick={() => window.location.href = `/watch?infoHash=${torrent.infoHash}&fileIndex=${i}`}
-                                className="h-8 gap-1.5 px-3 font-bold"
-                            >
-                                <Play className="size-3 fill-current" />
-                                Play
-                            </Button>
+                            
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => downloadFile(i)}
+                                    >
+                                        {file.progress >= 100 ? (
+                                            <Download className="size-4" />
+                                        ) : (
+                                            <DownloadCloud className="size-4" />
+                                        )}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {file.progress >= 100 ? "Download" : "Start Download Torrent"}
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        size="icon"
+                                        variant={file.progress > 0 ? "default" : "secondary"}
+                                        onClick={() => window.location.href = `/watch?infoHash=${torrent.infoHash}&fileIndex=${i}`}
+                                        className="size-8 shadow-sm"
+                                    >
+                                        <Play className="size-3.5 fill-current" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Play</TooltipContent>
+                            </Tooltip>
                         </div>
                     </div>
                 ))}
