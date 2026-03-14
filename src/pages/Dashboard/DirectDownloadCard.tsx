@@ -2,18 +2,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Play, FileVideo, HardDrive, Download } from "lucide-react";
+import { Play, FileVideo, HardDrive, Download, RotateCw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
 import type { DirectDownload } from "./types";
 import { formatBytes } from "./utils";
 import { cn } from "@/lib/utils";
+import ReencodeDialog from "./ReencodeDialog";
 
 type Props = {
     download: DirectDownload;
+    onReencode: (options: { infoHash?: string, fileIndex?: number, downloadId?: number, resolution: string, bitrate: string }) => Promise<boolean>;
 };
 
-export default function DirectDownloadCard({ download }: Props) {
+export default function DirectDownloadCard({ download, onReencode }: Props) {
     const { serverUrl } = useServer();
     const progress = download.progress ?? 0;
     const downloadedBytes = download.downloadedBytes ?? 0;
@@ -64,6 +66,21 @@ export default function DirectDownloadCard({ download }: Props) {
                         </div>
                         {isCompleted && (
                             <div className="flex items-center gap-1.5">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <ReencodeDialog
+                                            downloadId={download.id}
+                                            onReencode={onReencode}
+                                            trigger={
+                                                <Button variant="ghost" size="icon" className="size-8">
+                                                    <RotateCw className="size-4" />
+                                                </Button>
+                                            }
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Reencode to MP4</TooltipContent>
+                                </Tooltip>
+
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button

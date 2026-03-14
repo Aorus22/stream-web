@@ -202,6 +202,24 @@ export function Dashboard() {
         }
     };
 
+    const handleReencode = async (options: { infoHash?: string, fileIndex?: number, downloadId?: number, resolution: string, bitrate: string }) => {
+        if (!serverUrl) return;
+        try {
+            const res = await fetch(`${serverUrl}/api/reencode`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(options)
+            });
+            if (!res.ok) throw new Error("Failed to start reencoding");
+            // Refresh cache after a short delay or show a toast
+            setTimeout(fetchCachedFiles, 2000);
+            return true;
+        } catch (err) {
+            console.error("Reencode error:", err);
+            return false;
+        }
+    };
+
     const removeAllTorrents = async () => {
         if (!serverUrl) return;
         try {
@@ -413,7 +431,7 @@ export function Dashboard() {
                             ) : (
                                 <div className="grid gap-4">
                                     {torrents.map((t) => (
-                                        <TorrentCard key={t.infoHash} torrent={t} serverUrl={serverUrl} onCopy={copyToClipboard} onRemove={removeTorrent} />
+                                        <TorrentCard key={t.infoHash} torrent={t} serverUrl={serverUrl} onCopy={copyToClipboard} onRemove={removeTorrent} onReencode={handleReencode} />
                                     ))}
                                 </div>
                             )}
@@ -439,7 +457,7 @@ export function Dashboard() {
                             ) : (
                                 <div className="grid gap-3">
                                     {directDownloads.map((dl) => (
-                                        <DirectDownloadCard key={dl.id} download={dl} />
+                                        <DirectDownloadCard key={dl.id} download={dl} onReencode={handleReencode} />
                                     ))}
                                 </div>
                             )}
