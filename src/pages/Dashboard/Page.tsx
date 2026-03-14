@@ -24,8 +24,21 @@ import { useServer } from "@/contexts/ServerContext";
 import DirectDownloadCard from "./DirectDownloadCard";
 import TorrentCard from "./TorrentCard";
 import CachedGroupCard from "./CachedGroupCard";
+import ReencodeProgressCard from "./ReencodeProgressCard";
 import { formatBytes } from "./utils";
 import type { Torrent, CachedFile, CacheStats, DirectDownload } from "./types";
+
+export type ReencodeJob = {
+    id: string;
+    filename: string;
+    resolution: string;
+    bitrate: string;
+    progress: {
+        percent: number;
+        time: string;
+    };
+    status: "processing" | "completed" | "failed";
+};
 
 export function Dashboard() {
     const { serverUrl } = useServer();
@@ -36,6 +49,7 @@ export function Dashboard() {
     const [inputType, setInputType] = useState<'magnet' | 'direct'>('magnet');
     const [directUrl, setDirectUrl] = useState('');
     const [directDownloads, setDirectDownloads] = useState<DirectDownload[]>([]);
+    const [reencodeJobs, setReencodeJobs] = useState<ReencodeJob[]>([]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [refreshingCache, setRefreshingCache] = useState(false);
@@ -125,9 +139,21 @@ export function Dashboard() {
             }
         };
 
+        // SSE for Reencode Jobs
+        const reencodeSource = new EventSource(`${serverUrl}/api/reencode/stream`);
+        reencodeSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                setReencodeJobs(data || []);
+            } catch (err) {
+                console.error("Failed to parse reencode SSE:", err);
+            }
+        };
+
         return () => {
             torrentsSource.close();
             directSource.close();
+            reencodeSource.close();
         };
     }, [serverUrl, fetchTorrents, fetchCachedFiles, fetchDirectDownloads]);
 
@@ -202,8 +228,8 @@ export function Dashboard() {
         }
     };
 
-    const handleReencode = async (options: { infoHash?: string, fileIndex?: number, downloadId?: number, resolution: string, bitrate: string }) => {
-        if (!serverUrl) return;
+    const handleReencode = async (options: { infoHash?: string, fileIndex?: number, downloadId?: number, resolution: string, bitrate: string }): Promise<boolean> => {
+        if (!serverUrl) return false;
         try {
             const res = await fetch(`${serverUrl}/api/reencode`, {
                 method: "POST",
@@ -252,7 +278,7 @@ export function Dashboard() {
         }, {} as Record<string, CachedFile[]>);
     }, [magnetCachedFiles]);
 
-    const activeTransfersCount = torrents.length + directDownloads.filter(d => d.status === 'downloading').length;
+    const activeTransfersCount = torrents.length + directDownloads.filter(d => d.status === 'downloading').length + reencodeJobs.filter(j => j.status === 'processing').length;
 
     return (
         <TooltipProvider>
@@ -462,6 +488,21 @@ export function Dashboard() {
                                 </div>
                             )}
                         </section>
+
+                        {/* Reencode Jobs Section */}
+                        {reencodeJobs.length > 0 && (
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw className="size-5 text-primary/70" />
+                                    <h2 className="text-xl font-bold">Reencoding Tasks</h2>
+                                </div>
+                                <div className="grid gap-3">
+                                    {reencodeJobs.map((job) => (
+                                        <ReencodeProgressCard key={job.id} job={job} />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </TabsContent>
 
                     <TabsContent value="library" className="space-y-8 mt-0 outline-none">
