@@ -22,7 +22,7 @@ export type CachedFile = {
     name: string;
     path: string;
     size: number;
-    type: 'magnet' | 'direct';
+    type: 'magnet' | 'direct' | 'export';
     infoHash?: string;
     fileIndex?: number;
     downloadId?: number;

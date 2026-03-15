@@ -1,17 +1,20 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Settings } from "lucide-react";
+import { Settings, X } from "lucide-react";
 import type { ReencodeJob } from "./Page";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 type Props = {
     job: ReencodeJob;
+    onCancel?: () => void;
 };
 
-export default function ReencodeProgressCard({ job }: Props) {
+export default function ReencodeProgressCard({ job, onCancel }: Props) {
     const isCompleted = job.status === "completed";
     const isFailed = job.status === "failed";
+    const isCanceled = job.status === "canceled";
 
     return (
         <Card className="overflow-hidden border-2 hover:border-primary/20 transition-all duration-300">
@@ -26,7 +29,7 @@ export default function ReencodeProgressCard({ job }: Props) {
                                 <Badge className={cn(
                                     "h-5 text-[10px] font-bold uppercase tracking-wider",
                                     isCompleted ? "bg-primary/20 text-primary" : 
-                                    isFailed ? "bg-destructive/20 text-destructive" :
+                                    isFailed || isCanceled ? "bg-destructive/20 text-destructive" :
                                     "bg-primary text-primary-foreground animate-pulse"
                                 )}>
                                     {job.status}
@@ -47,12 +50,24 @@ export default function ReencodeProgressCard({ job }: Props) {
                     </div>
                     
                     <div className="flex flex-col items-end gap-3">
-                        <div className="text-2xl font-black tracking-tighter tabular-nums text-primary">
-                            {(job.progress?.percent || 0).toFixed(1)}%
+                        <div className="flex items-center gap-2">
+                            {job.status === "processing" && onCancel && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="size-8 text-destructive hover:bg-destructive/10"
+                                    onClick={onCancel}
+                                >
+                                    <X className="size-4" />
+                                </Button>
+                            )}
+                            <div className="text-2xl font-black tracking-tighter tabular-nums text-primary">
+                                {(job.progress?.percent || 0).toFixed(1)}%
+                            </div>
                         </div>
                     </div>
                 </div>
-                {!isCompleted && !isFailed && (
+                {!isCompleted && !isFailed && !isCanceled && (
                     <Progress value={job.progress?.percent || 0} className="h-1.5 mt-4 bg-muted" />
                 )}
             </CardContent>

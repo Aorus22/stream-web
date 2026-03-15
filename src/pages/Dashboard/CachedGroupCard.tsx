@@ -2,7 +2,7 @@ import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Copy, Trash2, FileVideo, Folder, Play, Download } from "lucide-react";
+import { Copy, Trash2, FileVideo, Folder, Play, Download, Cloud } from "lucide-react";
 import type { CachedFile } from "./types";
 import { formatBytes } from "./utils";
 
@@ -11,10 +11,11 @@ type Props = {
     files: CachedFile[];
     onDelete: (hash: string) => void;
     onCopy: (url: string) => void;
+    onMoveToDrive: (options: { infoHash?: string, fileIndex?: number, downloadId?: number }) => void;
     serverUrl: string | null;
 };
 
-export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, serverUrl }: Props) {
+export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, onMoveToDrive, serverUrl }: Props) {
     const totalSize = files.reduce((sum, file) => sum + (file.size || 0), 0);
     const copyStreamUrl = (fileIndex: number) => {
         if (!serverUrl) return;
@@ -96,6 +97,20 @@ export default function CachedGroupCard({ infoHash, files, onDelete, onCopy, ser
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>Copy Stream URL</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="size-8 opacity-0 group-hover/file:opacity-100"
+                                            onClick={() => onMoveToDrive({ infoHash, fileIndex: file.fileIndex })}
+                                        >
+                                            <Cloud className="size-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Move to Drive</TooltipContent>
                                 </Tooltip>
 
                                 <Tooltip>

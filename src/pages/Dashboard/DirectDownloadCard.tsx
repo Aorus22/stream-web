@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Play, FileVideo, HardDrive, Download, RotateCw } from "lucide-react";
+import { Play, FileVideo, HardDrive, Download, RotateCw, Cloud } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useServer } from "@/contexts/ServerContext";
 import type { DirectDownload } from "./types";
@@ -13,9 +13,10 @@ import ReencodeDialog from "./ReencodeDialog";
 type Props = {
     download: DirectDownload;
     onReencode: (options: { infoHash?: string, fileIndex?: number, downloadId?: number, resolution: string, bitrate: string }) => Promise<boolean>;
+    onMoveToDrive: (options: { infoHash?: string, fileIndex?: number, downloadId?: number }) => void;
 };
 
-export default function DirectDownloadCard({ download, onReencode }: Props) {
+export default function DirectDownloadCard({ download, onReencode, onMoveToDrive }: Props) {
     const { serverUrl } = useServer();
     const progress = download.progress ?? 0;
     const downloadedBytes = download.downloadedBytes ?? 0;
@@ -79,6 +80,20 @@ export default function DirectDownloadCard({ download, onReencode }: Props) {
                                         />
                                     </TooltipTrigger>
                                     <TooltipContent>Reencode to MP4</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="secondary"
+                                            size="icon"
+                                            onClick={() => onMoveToDrive({ downloadId: download.id })}
+                                            className="size-8"
+                                        >
+                                            <Cloud className="size-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Move to Drive</TooltipContent>
                                 </Tooltip>
 
                                 <Tooltip>

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Play, Download, Film, HardDrive, RefreshCw, Folder, FileVideo, Activity, Library, Plus } from "lucide-react";
+import { Play, Download, Film, HardDrive, RefreshCw, Folder, FileVideo, Activity, Library, Plus, Cloud, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,16 @@ export type ReencodeJob = {
         percent: number;
         time: string;
     };
-    status: "processing" | "completed" | "failed";
+    status: "processing" | "completed" | "failed" | "canceled";
+};
+
+export type GDriveJob = {
+    id: string;
+    filename: string;
+    status: "uploading" | "completed" | "failed" | "canceled";
+    progress: number;
+    link?: string;
+    error?: string;
 };
 
 export function Dashboard() {
@@ -50,6 +60,7 @@ export function Dashboard() {
     const [directUrl, setDirectUrl] = useState('');
     const [directDownloads, setDirectDownloads] = useState<DirectDownload[]>([]);
     const [reencodeJobs, setReencodeJobs] = useState<ReencodeJob[]>([]);
+    const [gdriveJobs, setGdriveJobs] = useState<GDriveJob[]>([]);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [refreshingCache, setRefreshingCache] = useState(false);
@@ -124,7 +135,7 @@ export function Dashboard() {
                 const data = JSON.parse(event.data);
                 setTorrents(data || []);
             } catch (err) {
-                console.error("Failed to parse torrent SSE:", err);
+                // Silently ignore parse errors in production
             }
         };
 
@@ -135,29 +146,31 @@ export function Dashboard() {
                 const data = JSON.parse(event.data);
                 setDirectDownloads(data || []);
             } catch (err) {
-                console.error("Failed to parse direct download SSE:", err);
+                // Silently ignore parse errors
             }
         };
 
-        // SSE for Reencode Jobs
-        const reencodeSource = new EventSource(`${serverUrl}/api/reencode/stream`);
-        reencodeSource.onmessage = (event) => {
+        // SSE for Background Tasks (Reencode + GDrive)
+        const tasksSource = new EventSource(`${serverUrl}/api/tasks/stream`);
+        tasksSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log("Reencode SSE update:", data);
-                setReencodeJobs(data || []);
+                if (data) {
+                    setReencodeJobs(data.reencode || []);
+                    setGdriveJobs(data.gdrive || []);
+                }
             } catch (err) {
-                console.error("Failed to parse reencode SSE:", err);
+                // Silently ignore parse errors
             }
         };
-        reencodeSource.onerror = (err) => {
-            console.error("Reencode SSE connection error:", err);
+        tasksSource.onerror = () => {
+            // Silently handle errors
         };
 
         return () => {
             torrentsSource.close();
             directSource.close();
-            reencodeSource.close();
+            tasksSource.close();
         };
     }, [serverUrl, fetchTorrents, fetchCachedFiles, fetchDirectDownloads]);
 
@@ -250,6 +263,36 @@ export function Dashboard() {
         }
     };
 
+    const handleMoveToDrive = async (options: { infoHash?: string, fileIndex?: number, downloadId?: number, exportPath?: string }) => {
+        if (!serverUrl) return;
+        try {
+            const res = await fetch(`${serverUrl}/api/gdrive/upload`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(options)
+            });
+            if (!res.ok) throw new Error("Failed to start GDrive upload");
+            alert("Upload to Google Drive started in background!");
+        } catch (err) {
+            console.error("GDrive upload error:", err);
+            alert("Failed to start GDrive upload.");
+        }
+    };
+
+    const handleCancelTask = async (type: 'reencode' | 'gdrive', id: string) => {
+        if (!serverUrl) return;
+        try {
+            const endpoint = type === 'reencode' ? '/api/reencode/cancel' : '/api/gdrive/cancel';
+            await fetch(`${serverUrl}${endpoint}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id })
+            });
+        } catch (err) {
+            console.error(`Failed to cancel ${type} task:`, err);
+        }
+    };
+
     const removeAllTorrents = async () => {
         if (!serverUrl) return;
         try {
@@ -272,6 +315,7 @@ export function Dashboard() {
 
     const magnetCachedFiles = cachedFiles.filter((f) => f.type === 'magnet' && !!f.infoHash);
     const directCachedFiles = cachedFiles.filter((f) => f.type === 'direct');
+    const exportCachedFiles = cachedFiles.filter((f) => f.type === 'export');
 
     const groupedCache = useMemo(() => {
         return magnetCachedFiles.reduce((acc, file) => {
@@ -282,7 +326,7 @@ export function Dashboard() {
         }, {} as Record<string, CachedFile[]>);
     }, [magnetCachedFiles]);
 
-    const activeTransfersCount = torrents.length + directDownloads.filter(d => d.status === 'downloading').length + reencodeJobs.filter(j => j.status === 'processing').length;
+    const activeTransfersCount = torrents.length + directDownloads.filter(d => d.status === 'downloading').length + reencodeJobs.filter(j => j.status === 'processing').length + gdriveJobs.filter(j => j.status === 'uploading').length;
 
     return (
         <TooltipProvider>
@@ -421,16 +465,78 @@ export function Dashboard() {
                     </TabsList>
 
                     <TabsContent value="transfers" className="space-y-8 mt-0 outline-none">
-                        {/* Reencode Jobs Section */}
-                        {reencodeJobs.length > 0 && (
+                        {/* Reencode & GDrive Jobs Section */}
+                        {(reencodeJobs.length > 0 || gdriveJobs.length > 0) && (
                             <section className="space-y-4">
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className="size-5 text-primary" />
-                                    <h2 className="text-xl font-bold">Reencoding Tasks</h2>
+                                    <h2 className="text-xl font-bold">Background Tasks</h2>
                                 </div>
                                 <div className="grid gap-3">
                                     {reencodeJobs.map((job) => (
-                                        <ReencodeProgressCard key={job.id} job={job} />
+                                        <ReencodeProgressCard key={job.id} job={job} onCancel={() => handleCancelTask('reencode', job.id)} />
+                                    ))}
+                                    {gdriveJobs.map((job) => (
+                                        <Card key={job.id} className="overflow-hidden border-2 hover:border-primary/20 transition-all duration-300">
+                                            <CardContent className="p-4 sm:p-5 bg-muted/20">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                                                        <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                                            <Cloud className={cn("size-5", job.status === "uploading" && "animate-bounce")} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1 space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge className={cn(
+                                                                    "h-5 text-[10px] font-bold uppercase tracking-wider",
+                                                                    job.status === "completed" ? "bg-primary/20 text-primary" : 
+                                                                    job.status === "failed" || job.status === "canceled" ? "bg-destructive/20 text-destructive" :
+                                                                    "bg-primary text-primary-foreground animate-pulse"
+                                                                )}>
+                                                                    {job.status === "uploading" ? "GDrive Uploading" : `GDrive ${job.status}`}
+                                                                </Badge>
+                                                            </div>
+                                                            <h4 className="font-bold break-all whitespace-normal leading-tight" title={job.filename}>
+                                                                {job.filename}
+                                                            </h4>
+                                                            {job.link && (
+                                                                <a 
+                                                                    href={job.link} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer" 
+                                                                    className="text-[10px] font-bold text-primary hover:underline block mt-1"
+                                                                >
+                                                                    VIEW ON DRIVE ↗
+                                                                </a>
+                                                            )}
+                                                            {job.error && (
+                                                                <p className="text-[10px] font-bold text-destructive mt-1 uppercase">Error: {job.error}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col items-end gap-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {job.status === "uploading" && (
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="size-8 text-destructive hover:bg-destructive/10"
+                                                                    onClick={() => handleCancelTask('gdrive', job.id)}
+                                                                >
+                                                                    <X className="size-4" />
+                                                                </Button>
+                                                            )}
+                                                            <div className="text-2xl font-black tracking-tighter tabular-nums text-primary">
+                                                                {job.progress.toFixed(1)}%
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {job.status === "uploading" && (
+                                                    <Progress value={job.progress} className="h-1.5 mt-4 bg-muted" />
+                                                )}
+                                            </CardContent>
+                                        </Card>
                                     ))}
                                 </div>
                             </section>
@@ -502,7 +608,7 @@ export function Dashboard() {
                             ) : (
                                 <div className="grid gap-3">
                                     {directDownloads.map((dl) => (
-                                        <DirectDownloadCard key={dl.id} download={dl} onReencode={handleReencode} />
+                                        <DirectDownloadCard key={dl.id} download={dl} onReencode={handleReencode} onMoveToDrive={handleMoveToDrive} />
                                     ))}
                                 </div>
                             )}
@@ -549,11 +655,68 @@ export function Dashboard() {
                             ) : (
                                 <div className="grid gap-4">
                                     {Object.entries(groupedCache).map(([infoHash, files]) => (
-                                        <CachedGroupCard key={infoHash} infoHash={infoHash} files={files} onDelete={deleteCachedFolder} onCopy={copyToClipboard} serverUrl={serverUrl} />
+                                        <CachedGroupCard key={infoHash} infoHash={infoHash} files={files} onDelete={deleteCachedFolder} onCopy={copyToClipboard} serverUrl={serverUrl} onMoveToDrive={handleMoveToDrive} />
                                     ))}
                                 </div>
                             )}
                         </section>
+
+                        {/* Export Cache Section */}
+                        {exportCachedFiles.length > 0 && (
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <Download className="size-5 text-primary/70" />
+                                    <h2 className="text-xl font-bold">Exported Videos (MP4)</h2>
+                                </div>
+                                <div className="grid gap-3">
+                                    {exportCachedFiles.map((file, idx) => (
+                                        <Card key={`${file.path}-${idx}`} className="group hover:border-primary/50 transition-colors">
+                                            <CardContent className="p-4">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div className="min-w-0 flex-1">
+                                                        <h4 className="font-semibold truncate">{file.name}</h4>
+                                                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                                            <Badge variant="outline" className="text-[10px] uppercase">READY</Badge>
+                                                            <span>{formatBytes(file.size || 0)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    size="icon"
+                                                                    className="size-8"
+                                                                    onClick={() => handleMoveToDrive({ exportPath: file.path })}
+                                                                >
+                                                                    <Cloud className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Move to Drive</TooltipContent>
+                                                        </Tooltip>
+
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    size="icon"
+                                                                    className="size-8"
+                                                                    onClick={() => window.open(`${serverUrl}${file.streamUrl}`, '_blank')}
+                                                                    disabled={!serverUrl}
+                                                                >
+                                                                    <Download className="size-4" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Download MP4</TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
 
                         {/* Direct Cache Section */}
                         {(isInitialLoading || directCachedFiles.length > 0) && (
