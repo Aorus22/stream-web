@@ -32,6 +32,7 @@ type SubtitleCue = {
     start: number;
     end: number;
     text: string;
+    position?: string;
 };
 
 type EmbeddedSubtitle = {
@@ -94,7 +95,7 @@ export default function VideoPlayer() {
 
     // Client-Side Rendering State
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
-    const [currentSubtitleText, setCurrentSubtitleText] = useState<string | null>(null);
+    const [currentActiveCues, setCurrentActiveCues] = useState<SubtitleCue[]>([]);
 
     // Video Rect for Subtitles
     const [videoRect, setVideoRect] = useState({ top: 0, left: 0, width: 0, height: 0 });
@@ -450,10 +451,10 @@ export default function VideoPlayer() {
 
             if (subtitleCues.length > 0) {
                 const targetTime = absTime - subOffset;
-                const cue = subtitleCues.find(c => targetTime >= c.start && targetTime <= c.end);
-                setCurrentSubtitleText(cue ? cue.text : null);
+                const activeCues = subtitleCues.filter(c => targetTime >= c.start && targetTime <= c.end);
+                setCurrentActiveCues(activeCues);
             } else {
-                setCurrentSubtitleText(null);
+                setCurrentActiveCues([]);
             }
 
             // Capture browser buffered ranges (useful for HLS mode)
@@ -563,9 +564,9 @@ export default function VideoPlayer() {
             )}
 
             {/* Custom Subtitle Overlay - Relative to Video Rect */}
-            {currentSubtitleText && (
+            {currentActiveCues.length > 0 && (
                 <div
-                    className="absolute pointer-events-none flex items-center justify-center text-center"
+                    className="absolute pointer-events-none"
                     style={{
                         top: videoRect.top,
                         left: videoRect.left,
@@ -574,22 +575,36 @@ export default function VideoPlayer() {
                         zIndex: 30
                     }}
                 >
-                    <div
-                        className="absolute w-full px-4 flex flex-col items-center justify-center pointer-events-none"
-                        style={{
-                            bottom: `${10 + (subPos * 0.5)}%`,
-                        }}
-                    >
-                        <span
-                            className="bg-black/50 text-white px-2 py-1 rounded inline-block whitespace-pre-wrap"
-                            style={{
-                                fontSize: `${Math.max(12, (videoRect.height * 0.045) * (subSize / 100))}px`,
-                                textShadow: '0 1px 2px rgba(0,0,0,1)'
-                            }}
-                        >
-                            {currentSubtitleText}
-                        </span>
-                    </div>
+                    {(() => {
+                        const topCues = currentActiveCues.filter(c => c.position === 'top');
+                        const middleCues = currentActiveCues.filter(c => c.position === 'middle');
+                        const bottomCues = currentActiveCues.filter(c => c.position !== 'top' && c.position !== 'middle');
+                        const groups: { cues: SubtitleCue[]; style: React.CSSProperties }[] = [];
+                        if (topCues.length > 0) groups.push({ cues: topCues, style: { top: '5%' } });
+                        if (middleCues.length > 0) groups.push({ cues: middleCues, style: { top: '45%', transform: 'translateY(-50%)' } });
+                        if (bottomCues.length > 0) groups.push({ cues: bottomCues, style: { bottom: `${10 + (subPos * 0.5)}%` } });
+
+                        return groups.map((group, gi) => (
+                            <div
+                                key={gi}
+                                className="absolute w-full px-4 flex flex-col items-center justify-center pointer-events-none"
+                                style={group.style}
+                            >
+                                {group.cues.map((cue, ci) => (
+                                    <span
+                                        key={ci}
+                                        className="bg-black/50 text-white px-2 py-1 rounded inline-block whitespace-pre-wrap"
+                                        style={{
+                                            fontSize: `${Math.max(12, (videoRect.height * 0.045) * (subSize / 100))}px`,
+                                            textShadow: '0 1px 2px rgba(0,0,0,1)'
+                                        }}
+                                    >
+                                        {cue.text}
+                                    </span>
+                                ))}
+                            </div>
+                        ));
+                    })()}
                 </div>
             )}
 
