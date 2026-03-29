@@ -22,6 +22,12 @@ type FileInfo = {
     size: number;
 };
 
+type TorrentMeta = {
+    title: string;
+    background: string;
+    logo: string;
+};
+
 type SubtitleCue = {
     start: number;
     end: number;
@@ -64,7 +70,9 @@ export default function VideoPlayer() {
     const [fullscreen, setFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const [loading, setLoading] = useState(true);
+    const [initialLoading, setInitialLoading] = useState(true);
     const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
+    const [torrentMeta, setTorrentMeta] = useState<TorrentMeta | null>(null);
     const seekOffsetRef = useRef(0);
     const isDraggingRef = useRef(false); // Use ref to avoid stale closure in useEffect
     const seekAmount = 10; // seconds to seek with arrow keys
@@ -194,6 +202,16 @@ export default function VideoPlayer() {
                 const metaData = await metaRes.json();
                 if (metaData.duration > 0) setDuration((prev) => Math.max(prev, metaData.duration));
                 if (metaData.subtitles) setEmbeddedSubs(metaData.subtitles);
+
+                try {
+                    const torrentMetaRes = await fetch(`${serverUrl}/api/torrent/metadata/${infoHash}`);
+                    if (torrentMetaRes.ok) {
+                        const torrentMetaData = await torrentMetaRes.json();
+                        if (torrentMetaData.title) {
+                            setTorrentMeta(torrentMetaData as TorrentMeta);
+                        }
+                    }
+                } catch {}
             } catch (err) {
                 console.error("Metadata error", err);
             }
@@ -506,7 +524,7 @@ export default function VideoPlayer() {
                 className="w-full h-full object-contain"
                 autoPlay
                 crossOrigin="anonymous"
-                onPlay={() => { setPlaying(true); setLoading(false); }}
+                onPlay={() => { setPlaying(true); setLoading(false); setInitialLoading(false); }}
                 onPause={() => setPlaying(false)}
                 onLoadedMetadata={syncDurationFromVideo}
                 onDurationChange={syncDurationFromVideo}
@@ -575,9 +593,45 @@ export default function VideoPlayer() {
                 </div>
             )}
 
-            {loading && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+            {initialLoading && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 bg-black">
+                    {torrentMeta?.background ? (
+                        <>
+                            <img
+                                src={torrentMeta.background}
+                                alt=""
+                                className="absolute inset-0 w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/70" />
+                            <div className="relative z-10 flex flex-col items-center gap-6">
+                                {torrentMeta.logo ? (
+                                    <img
+                                        src={torrentMeta.logo}
+                                        alt=""
+                                        className="max-w-[280px] max-h-[120px] object-contain animate-pulse"
+                                    />
+                                ) : (
+                                    <div className="text-3xl font-black text-white/80 tracking-[0.3em] animate-pulse">STREAM</div>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+                    )}
+                </div>
+            )}
+
+            {!initialLoading && loading && playing && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
+                    {torrentMeta?.logo ? (
+                        <img
+                            src={torrentMeta.logo}
+                            alt=""
+                            className="w-[140px] h-[60px] object-contain animate-pulse mx-auto my-0"
+                        />
+                    ) : (
+                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white/60 mx-auto"></div>
+                    )}
                 </div>
             )}
 
@@ -596,7 +650,7 @@ export default function VideoPlayer() {
                     <ArrowLeft size={20} />
                 </button>
                 <div className="pl-12">
-                    <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{fileInfo?.name || "Loading..."}</h1>
+                    <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{torrentMeta?.title || fileInfo?.name || "Loading..."}</h1>
                     <p className="text-xs text-white/50 text-left">
                         {streamMode === 'hls' ? 'HLS' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
                     </p>
@@ -732,7 +786,7 @@ export default function VideoPlayer() {
                                 fileIndex={fileIndex}
                                 serverUrl={serverUrl}
                                 setSubOffset={setSubOffset}
-                                initialQuery={fileInfo?.name ? fileInfo.name.replace(/\./g, " ") : ""}
+                                initialQuery={(torrentMeta?.title ?? fileInfo?.name ?? "").replace(/\./g, " ")}
                             />
 
                             <SettingsPopover

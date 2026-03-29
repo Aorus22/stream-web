@@ -229,13 +229,21 @@ const searchTorrents = async (query?: string, episode?: EpisodeInfo, providerOve
     };
 
     const addTorrent = async (magnet: string) => {
-        if (!serverUrl) return;
+        if (!serverUrl || !detail) return;
         setAddingTorrent(magnet);
         try {
+            const metadataObj: { title: string; background: string; logo: string } = {
+                title: selectedEpisode
+                    ? `${detail.title} S${String(selectedEpisode.season).padStart(2, '0')}E${String(selectedEpisode.episode).padStart(2, '0')}`
+                    : detail.title,
+                background: detail.backdrop || '',
+                logo: detail.logo || '',
+            };
+
             const res = await fetch(`${serverUrl}/api/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: `magnet=${encodeURIComponent(magnet)}`,
+                body: `magnet=${encodeURIComponent(magnet)}&metadata=${encodeURIComponent(JSON.stringify(metadataObj))}`,
             });
             if (!res.ok) throw new Error("Failed to add torrent");
             router.navigate('/dashboard');
