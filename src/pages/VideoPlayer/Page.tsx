@@ -75,7 +75,9 @@ export default function VideoPlayer() {
     const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
     const [torrentMeta, setTorrentMeta] = useState<TorrentMeta | null>(null);
     const seekOffsetRef = useRef(0);
-    const isDraggingRef = useRef(false); // Use ref to avoid stale closure in useEffect
+    const isDraggingRef = useRef(false);
+    const hlsSessionIdRef = useRef<string | null>(null);
+    const hlsStartTimeRef = useRef(0);
     const seekAmount = 10; // seconds to seek with arrow keys
 
     // Stream mode: "direct" = fMP4 remux (fast), "hls" = HLS transcoding (compatible)
@@ -274,14 +276,8 @@ export default function VideoPlayer() {
         const d = video.duration;
         if (!Number.isFinite(d) || d <= 0) return;
 
-        if (!isDirectDownload && streamMode !== 'direct') return;
-
-        setDuration((prev) => {
-            if (prev <= 0) return d;
-            if (d > prev) return d;
-            return prev;
-        });
-    }, [isDirectDownload, streamMode]);
+        setDuration((prev) => Math.max(prev, d));
+    }, []);
 
     const handleSeek = useCallback((time: number) => {
         const video = videoRef.current;
@@ -293,21 +289,82 @@ export default function VideoPlayer() {
         setCurrentTime(targetTime);
 
         if (videoRef.current && serverUrl) {
-            if (streamMode === 'hls' && hlsRef.current) {
-                // HLS: just set currentTime, HLS.js handles segment loading
-                videoRef.current.currentTime = targetTime;
+            if (streamMode === 'hls' && !isDirectDownload) {
+                const vid = videoRef.current;
+                if (vid) {
+                    const absTarget = hlsStartTimeRef.current + targetTime;
+                    for (let i = 0; i < vid.buffered.length; i++) {
+                        if (absTarget >= vid.buffered.start(i) && absTarget <= vid.buffered.end(i)) {
+                            vid.currentTime = absTarget;
+                            return;
+                        }
+                    }
+                }
+
+                (async () => {
+                    if (hlsSessionIdRef.current) {
+                        fetch(`${serverUrl}/hls-live/${hlsSessionIdRef.current}`, { method: 'DELETE' }).catch(() => {});
+                    }
+
+                    try {
+                        const startRes = await fetch(`${serverUrl}/hls-live/start`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ infoHash, fileIndex, startTime: targetTime }),
+                        });
+                        const { sessionId, playlistUrl, startTime } = await startRes.json();
+
+                        hlsSessionIdRef.current = sessionId;
+                        hlsStartTimeRef.current = startTime;
+
+                        if (hlsRef.current) {
+                            hlsRef.current.destroy();
+                            hlsRef.current = null;
+                        }
+
+                        if (Hls.isSupported()) {
+                            const hls = new Hls({
+                                debug: false,
+                                enableWorker: true,
+                                maxBufferLength: 30,
+                                maxMaxBufferLength: 60,
+                                maxBufferSize: 60 * 1000 * 1000,
+                                backBufferLength: 8,
+                            });
+                            hlsRef.current = hls;
+                            hls.loadSource(`${serverUrl}${playlistUrl}`);
+                            hls.attachMedia(videoRef.current!);
+                            hls.on(Hls.Events.ERROR, (_, data) => {
+                                if (data.fatal) {
+                                    switch (data.type) {
+                                        case Hls.ErrorTypes.NETWORK_ERROR:
+                                            hls.startLoad();
+                                            break;
+                                        case Hls.ErrorTypes.MEDIA_ERROR:
+                                            hls.recoverMediaError();
+                                            break;
+                                        default:
+                                            hls.destroy();
+                                            break;
+                                    }
+                                }
+                            });
+                        }
+                    } catch (err) {
+                        console.error("HLS live seek failed:", err);
+                    }
+                })();
             } else {
-                    if (isDirectDownload) {
-                        videoRef.current.currentTime = targetTime;
-                        videoRef.current.play();
-                        setPlaying(true);
-                    } else {
-                        // Direct: new fMP4 stream from seek position
-                        seekOffsetRef.current = targetTime;
-                        const dParam = effectiveDuration > 0 ? `&d=${encodeURIComponent(String(effectiveDuration))}` : "";
-                        videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${encodeURIComponent(String(targetTime))}${dParam}`;
-                        videoRef.current.play();
-                        setPlaying(true);
+                if (isDirectDownload) {
+                    videoRef.current.currentTime = targetTime;
+                    videoRef.current.play();
+                    setPlaying(true);
+                } else {
+                    seekOffsetRef.current = targetTime;
+                    const dParam = effectiveDuration > 0 ? `&d=${encodeURIComponent(String(effectiveDuration))}` : "";
+                    videoRef.current.src = `${serverUrl}/stream/${infoHash}/${fileIndex}?t=${encodeURIComponent(String(targetTime))}${dParam}`;
+                    videoRef.current.play();
+                    setPlaying(true);
                 }
             }
         }
@@ -393,37 +450,51 @@ export default function VideoPlayer() {
         }
 
         if (streamMode === 'hls') {
-            const hlsUrl = `${serverUrl}/hls/${infoHash}/${fileIndex}/playlist.m3u8`;
-
             if (Hls.isSupported()) {
-                const hls = new Hls({
-                    debug: false,
-                    enableWorker: true,
-                    maxBufferLength: 600,
-                    maxMaxBufferLength: 1200,
-                    maxBufferSize: 500 * 1000 * 1000,
-                    backBufferLength: 60,
-                });
-                hlsRef.current = hls;
-                hls.loadSource(hlsUrl);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.ERROR, (_, data) => {
-                    if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                hls.destroy();
-                                break;
-                        }
+                (async () => {
+                    try {
+                        const startRes = await fetch(`${serverUrl}/hls-live/start`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ infoHash, fileIndex, startTime: 0 }),
+                        });
+                        const { sessionId, playlistUrl, startTime } = await startRes.json();
+
+                        hlsSessionIdRef.current = sessionId;
+                        hlsStartTimeRef.current = startTime;
+
+                        const hls = new Hls({
+                            debug: false,
+                            enableWorker: true,
+                            maxBufferLength: 30,
+                            maxMaxBufferLength: 60,
+                            maxBufferSize: 60 * 1000 * 1000,
+                            backBufferLength: 8,
+                        });
+                        hlsRef.current = hls;
+                        hls.loadSource(`${serverUrl}${playlistUrl}`);
+                        hls.attachMedia(video);
+                        hls.on(Hls.Events.ERROR, (_, data) => {
+                            if (data.fatal) {
+                                switch (data.type) {
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                        hls.startLoad();
+                                        break;
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                        hls.recoverMediaError();
+                                        break;
+                                    default:
+                                        hls.destroy();
+                                        break;
+                                }
+                            }
+                        });
+                    } catch (err) {
+                        console.error("Failed to start HLS live session:", err);
                     }
-                });
+                })();
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = hlsUrl;
+                video.src = `${serverUrl}/hls/${infoHash}/${fileIndex}/playlist.m3u8`;
             }
         } else {
             // Direct fMP4 stream — BE remuxes (copy video, re-encode audio only)
@@ -435,6 +506,10 @@ export default function VideoPlayer() {
                 hlsRef.current.destroy();
                 hlsRef.current = null;
             }
+            if (hlsSessionIdRef.current && serverUrl) {
+                fetch(`${serverUrl}/hls-live/${hlsSessionIdRef.current}`, { method: 'DELETE' }).catch(() => {});
+                hlsSessionIdRef.current = null;
+            }
         };
     }, [streamMode, serverUrl, infoHash, fileIndex, isDirectDownload, directId]);
 
@@ -445,8 +520,11 @@ export default function VideoPlayer() {
 
         const onTimeUpdate = () => {
             if (isDraggingRef.current) return;
-            // HLS: currentTime is absolute. Direct: seekOffset + currentTime
-            const absTime = isDirectDownload ? video.currentTime : (streamMode === 'hls' ? video.currentTime : seekOffsetRef.current + video.currentTime);
+            const absTime = isDirectDownload
+                ? video.currentTime
+                : streamMode === 'hls'
+                    ? hlsStartTimeRef.current + video.currentTime
+                    : seekOffsetRef.current + video.currentTime;
             setCurrentTime(absTime);
 
             if (subtitleCues.length > 0) {
@@ -498,6 +576,7 @@ export default function VideoPlayer() {
             setCurrentTime(0);
             setDuration(0);
             seekOffsetRef.current = 0;
+            hlsStartTimeRef.current = 0;
             setBufferedRanges([]);
             setHlsBufferedRanges([]);
             setHoverTime(null);
