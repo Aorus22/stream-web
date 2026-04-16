@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 type SettingsPopoverProps = {
     containerRef: React.RefObject<HTMLDivElement | null>;
-    streamMode: 'direct' | 'hls';
-    setStreamMode: (mode: 'direct' | 'hls') => void;
+    streamMode: 'direct' | 'hls' | 'static';
+    setStreamMode: (mode: 'direct' | 'hls' | 'static') => void;
     subOffset: number;
     setSubOffset: (offset: number) => void;
     subSize: number;
@@ -96,11 +96,24 @@ export default function SettingsPopover({
                             >
                                 HLS
                             </button>
+                            <button
+                                onClick={() => setStreamMode('static')}
+                                className={cn(
+                                    "flex-1 px-3 py-2 text-xs font-medium transition-colors",
+                                    streamMode === 'static'
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-white/5 text-white/60 hover:bg-white/10"
+                                )}
+                            >
+                                Static
+                            </button>
                         </div>
                         <p className="text-[10px] text-white/40 leading-tight">
                             {streamMode === 'direct'
                                 ? "Fast startup, no video re-encoding. Seek creates new stream."
-                                : "Slower startup (transcodes segments), but seeking within buffered range is instant."
+                                : streamMode === 'hls'
+                                ? "Slower startup (transcodes segments), but seeking within buffered range is instant."
+                                : "Downloads entire file first, then plays natively without transcoding."
                             }
                         </p>
                     </div>

@@ -43,9 +43,13 @@ type EmbeddedSubtitle = {
 };
 
 type SSEStats = {
+    downloadSpeed?: number;
     files?: Array<{
         name?: string;
         length: number;
+        progress?: number;
+        piecesReady?: number;
+        piecesTotal?: number;
         bufferedRanges?: Array<{ start: number; end: number }>;
     }>;
 };
@@ -81,9 +85,9 @@ export default function VideoPlayer() {
     const seekAmount = 10; // seconds to seek with arrow keys
 
     // Stream mode: "direct" = fMP4 remux (fast), "hls" = HLS transcoding (compatible)
-    const [streamMode, setStreamMode] = useState<'direct' | 'hls'>(() => {
+    const [streamMode, setStreamMode] = useState<'direct' | 'hls' | 'static'>(() => {
         const saved = localStorage.getItem('streamMode');
-        return (saved === 'hls' || saved === 'direct') ? saved : 'direct';
+        return (saved === 'hls' || saved === 'direct' || saved === 'static') ? saved : 'direct';
     });
 
     const [embeddedSubs, setEmbeddedSubs] = useState<EmbeddedSubtitle[]>([]);
@@ -94,6 +98,9 @@ export default function VideoPlayer() {
     const [hlsBufferedRanges, setHlsBufferedRanges] = useState<{ start: number; end: number }[]>([]);
     const [hoverTime, setHoverTime] = useState<number | null>(null);
     const [hoverPosition, setHoverPosition] = useState<number>(0);
+    const [staticProgress, setStaticProgress] = useState<number>(0);
+    const [staticSpeed, setStaticSpeed] = useState<number>(0);
+    const [staticReady, setStaticReady] = useState(false);
 
     // Client-Side Rendering State
     const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([]);
@@ -233,13 +240,20 @@ export default function VideoPlayer() {
                 const data = JSON.parse(event.data) as SSEStats;
                 const file = data.files && data.files[Number(fileIndex)];
 
+                if (data.downloadSpeed !== undefined) {
+                    setStaticSpeed(data.downloadSpeed);
+                }
+
                 if (file && file.bufferedRanges && file.length) {
-                    // Convert byte ranges to time ranges
                     const ranges = file.bufferedRanges.map((r) => ({
                         start: (r.start / file.length) * duration,
                         end: (r.end / file.length) * duration
                     }));
                     setBufferedRanges(ranges);
+                }
+
+                if (file && file.progress !== undefined) {
+                    setStaticProgress(file.progress);
                 }
             } catch (e) {
                 console.error("SSE Parse Error", e);
@@ -289,6 +303,11 @@ export default function VideoPlayer() {
         setCurrentTime(targetTime);
 
         if (videoRef.current && serverUrl) {
+            if (streamMode === 'static' && !isDirectDownload) {
+                videoRef.current.currentTime = targetTime;
+                return;
+            }
+
             if (streamMode === 'hls' && !isDirectDownload) {
                 const vid = videoRef.current;
                 if (vid) {
@@ -438,7 +457,6 @@ export default function VideoPlayer() {
         const video = videoRef.current;
         if (!video || !serverUrl) return;
 
-        // Cleanup previous HLS instance
         if (hlsRef.current) {
             hlsRef.current.destroy();
             hlsRef.current = null;
@@ -446,6 +464,22 @@ export default function VideoPlayer() {
 
         if (isDirectDownload) {
             video.src = `${serverUrl}/stream/direct/${directId}`;
+            return;
+        }
+
+        if (streamMode === 'static') {
+            setStaticProgress(0);
+            setStaticReady(false);
+            setInitialLoading(true);
+
+            fetch(`${serverUrl}/api/static/prepare`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ infoHash, fileIndex }),
+            }).catch((err) => {
+                console.error("Failed to prepare static download:", err);
+            });
+
             return;
         }
 
@@ -513,6 +547,20 @@ export default function VideoPlayer() {
         };
     }, [streamMode, serverUrl, infoHash, fileIndex, isDirectDownload, directId]);
 
+    // Static mode: start playback when download reaches 100%
+    useEffect(() => {
+        if (streamMode !== 'static' || isDirectDownload || staticReady) return;
+        if (staticProgress < 100) return;
+
+        const video = videoRef.current;
+        if (!video || !serverUrl) return;
+
+        setStaticReady(true);
+        setInitialLoading(false);
+        video.src = `${serverUrl}/stream/static/${infoHash}/${fileIndex}`;
+        video.play().catch(() => {});
+    }, [staticProgress, staticReady, streamMode, infoHash, fileIndex, serverUrl, isDirectDownload]);
+
     // 2. Time Update & Subtitle Rendering Logic
     useEffect(() => {
         const video = videoRef.current;
@@ -520,7 +568,7 @@ export default function VideoPlayer() {
 
         const onTimeUpdate = () => {
             if (isDraggingRef.current) return;
-            const absTime = isDirectDownload
+            const absTime = isDirectDownload || streamMode === 'static'
                 ? video.currentTime
                 : streamMode === 'hls'
                     ? hlsStartTimeRef.current + video.currentTime
@@ -582,6 +630,8 @@ export default function VideoPlayer() {
             setHoverTime(null);
             setHoverPosition(0);
             setLoading(true);
+            setStaticProgress(0);
+            setStaticReady(false);
         });
 
         return () => {
@@ -689,28 +739,90 @@ export default function VideoPlayer() {
 
             {initialLoading && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 bg-black">
-                    {torrentMeta?.background ? (
+                    {streamMode === 'static' && !isDirectDownload ? (
                         <>
-                            <img
-                                src={torrentMeta.background}
-                                alt=""
-                                className="absolute inset-0 w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/70" />
-                            <div className="relative z-10 flex flex-col items-center gap-6">
-                                {torrentMeta.logo ? (
+                            {torrentMeta?.background && (
+                                <>
                                     <img
-                                        src={torrentMeta.logo}
+                                        src={torrentMeta.background}
                                         alt=""
-                                        className="max-w-[280px] max-h-[120px] object-contain animate-pulse"
+                                        className="absolute inset-0 w-full h-full object-cover"
                                     />
-                                ) : (
-                                    <div className="text-3xl font-black text-white/80 tracking-[0.3em] animate-pulse">STREAM</div>
-                                )}
+                                    <div className="absolute inset-0 bg-black/80" />
+                                </>
+                            )}
+                            <div className="relative z-10 flex flex-col items-center gap-4">
+                                <div className="relative w-32 h-32">
+                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                                        <circle
+                                            cx="60" cy="60" r="52"
+                                            fill="none"
+                                            stroke="rgba(255,255,255,0.1)"
+                                            strokeWidth="6"
+                                        />
+                                        <circle
+                                            cx="60" cy="60" r="52"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="6"
+                                            strokeLinecap="round"
+                                            className="text-primary"
+                                            strokeDasharray={`${2 * Math.PI * 52}`}
+                                            strokeDashoffset={`${2 * Math.PI * 52 * (1 - staticProgress / 100)}`}
+                                            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                                        />
+                                    </svg>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <span className="text-white text-2xl font-bold tabular-nums">
+                                            {Math.floor(staticProgress)}%
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                    {torrentMeta?.logo ? (
+                                        <img
+                                            src={torrentMeta.logo}
+                                            alt=""
+                                            className="max-w-[200px] max-h-[60px] object-contain mb-2"
+                                        />
+                                    ) : fileInfo?.name ? (
+                                        <span className="text-white/80 text-sm font-medium max-w-xs text-center truncate">
+                                            {fileInfo.name}
+                                        </span>
+                                    ) : null}
+                                    <span className="text-white/50 text-xs">
+                                        {fileInfo?.size ? `${(fileInfo.size / 1024 / 1024 / 1024).toFixed(2)} GB` : ''}
+                                        {staticSpeed > 0 ? ` • ${(staticSpeed / 1024 / 1024).toFixed(1)} MB/s` : ''}
+                                    </span>
+                                </div>
                             </div>
                         </>
                     ) : (
-                        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+                        <>
+                            {torrentMeta?.background ? (
+                                <>
+                                    <img
+                                        src={torrentMeta.background}
+                                        alt=""
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black/70" />
+                                    <div className="relative z-10 flex flex-col items-center gap-6">
+                                        {torrentMeta.logo ? (
+                                            <img
+                                                src={torrentMeta.logo}
+                                                alt=""
+                                                className="max-w-[280px] max-h-[120px] object-contain animate-pulse"
+                                            />
+                                        ) : (
+                                            <div className="text-3xl font-black text-white/80 tracking-[0.3em] animate-pulse">STREAM</div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+                            )}
+                        </>
                     )}
                 </div>
             )}
@@ -746,7 +858,7 @@ export default function VideoPlayer() {
                 <div className="pl-12">
                     <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{torrentMeta?.title || fileInfo?.name || "Loading..."}</h1>
                     <p className="text-xs text-white/50 text-left">
-                        {streamMode === 'hls' ? 'HLS' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
+                        {streamMode === 'hls' ? 'HLS' : streamMode === 'static' ? 'Static' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
                     </p>
                 </div>
             </div>
