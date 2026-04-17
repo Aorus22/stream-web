@@ -604,7 +604,7 @@ export default function VideoPlayer() {
         if (target.closest('button') || target.closest('input') || target.closest('[data-radix-popper-content-wrapper]')) {
             return;
         }
-
+        if (streamMode === 'static' && !staticReady) return;
         togglePlay();
     }
 
