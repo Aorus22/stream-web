@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Type, ArrowUp, Loader2 } from "lucide-react";
+import { Settings, Type, ArrowUp, Loader2, Copy } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -69,7 +69,22 @@ export default function SettingsPopover({
             </PopoverTrigger>
             <PopoverContent container={containerRef.current || undefined} className="w-64 p-4 bg-black/90 border-white/10 backdrop-blur-md text-white" side="top" align="end">
                 <div className="flex flex-col gap-3">
-                    <h3 className="font-bold flex items-center gap-2"><Settings size={18} /> Settings</h3>
+                    <div className="flex items-center justify-between">
+                        <h3 className="font-bold flex items-center gap-2"><Settings size={18} /> Settings</h3>
+                        {streamMode === 'static' && (
+                            <button
+                                onClick={() => {
+                                    const url = `${serverUrl}/stream/static/${infoHash}/${fileIndex}`;
+                                    navigator.clipboard.writeText(url);
+                                    toast.success("Static link copied to clipboard");
+                                }}
+                                className="p-1 hover:bg-white/10 rounded-md transition-colors group"
+                                title="Copy Direct Link"
+                            >
+                                <Copy size={16} className="text-white/70 group-hover:text-white" />
+                            </button>
+                        )}
+                    </div>
 
                     <div className="space-y-2">
                         <span className="text-xs text-white/70">Stream Mode</span>
