@@ -870,11 +870,11 @@ export default function VideoPlayer() {
                 <div className="pl-12">
                     <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{torrentMeta?.title || fileInfo?.name || "Loading..."}</h1>
                     <p className="text-xs text-white/50 text-left">
-                        {streamMode === 'hls' ? 'HLS' : streamMode === 'static' ? 'Static' : 'Direct'} • {fileInfo && fileInfo.size ? (
+                        {streamMode === 'hls' ? 'HLS' : streamMode === 'static' ? 'Static' : 'Direct'} • {fileInfo ? (
                             fileInfo.size >= 1024 * 1024 * 1024
                                 ? `${(fileInfo.size / 1024 / 1024 / 1024).toFixed(2)} GB`
                                 : `${(fileInfo.size / 1024 / 1024).toFixed(1)} MB`
-                        ) : ""}
+                        ) : "Loading..."}
                     </p>
                 </div>
             </div>
