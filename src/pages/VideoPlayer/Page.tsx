@@ -249,16 +249,24 @@ export default function VideoPlayer() {
                     setStaticSpeed(data.downloadSpeed);
                 }
 
-                if (file && file.bufferedRanges && file.length) {
-                    const ranges = file.bufferedRanges.map((r) => ({
-                        start: (r.start / file.length) * duration,
-                        end: (r.end / file.length) * duration
+                if (file) {
+                    // Dynamic update file info from SSE
+                    setFileInfo(prev => ({
+                        name: file.name || prev?.name || '',
+                        size: file.length || prev?.size || 0
                     }));
-                    setBufferedRanges(ranges);
-                }
 
-                if (file && file.progress !== undefined) {
-                    setStaticProgress(file.progress);
+                    if (file.bufferedRanges && file.length) {
+                        const ranges = file.bufferedRanges.map((r) => ({
+                            start: (r.start / file.length) * duration,
+                            end: (r.end / file.length) * duration
+                        }));
+                        setBufferedRanges(ranges);
+                    }
+
+                    if (file.progress !== undefined) {
+                        setStaticProgress(file.progress);
+                    }
                 }
             } catch (e) {
                 console.error("SSE Parse Error", e);
