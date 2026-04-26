@@ -206,7 +206,12 @@ export default function VideoPlayer() {
                 const statsRes = await fetch(`${serverUrl}/api/stats/${infoHash}`);
                 const statsData = await statsRes.json();
                 const file = statsData.files && statsData.files[Number(fileIndex)];
-                if (file) setFileInfo(file);
+                if (file) {
+                    setFileInfo({
+                        name: file.name || '',
+                        size: file.length || 0
+                    });
+                }
 
                 const metaRes = await fetch(`${serverUrl}/api/metadata/${infoHash}/${fileIndex}`);
                 const metaData = await metaRes.json();
@@ -457,6 +462,11 @@ export default function VideoPlayer() {
         const video = videoRef.current;
         if (!video || !serverUrl) return;
 
+        // Stop current playback and clear source
+        video.pause();
+        video.src = "";
+        video.load();
+
         if (hlsRef.current) {
             hlsRef.current.destroy();
             hlsRef.current = null;
@@ -464,10 +474,7 @@ export default function VideoPlayer() {
 
         if (isDirectDownload) {
             video.src = `${serverUrl}/stream/direct/${directId}`;
-            return;
-        }
-
-        if (streamMode === 'static') {
+        } else if (streamMode === 'static') {
             setStaticProgress(0);
             setStaticReady(false);
             setInitialLoading(true);
@@ -479,11 +486,7 @@ export default function VideoPlayer() {
             }).catch((err) => {
                 console.error("Failed to prepare static download:", err);
             });
-
-            return;
-        }
-
-        if (streamMode === 'hls') {
+        } else if (streamMode === 'hls') {
             if (Hls.isSupported()) {
                 (async () => {
                     try {
@@ -536,6 +539,11 @@ export default function VideoPlayer() {
         }
 
         return () => {
+            if (videoRef.current) {
+                videoRef.current.pause();
+                videoRef.current.src = "";
+                videoRef.current.load();
+            }
             if (hlsRef.current) {
                 hlsRef.current.destroy();
                 hlsRef.current = null;
@@ -791,7 +799,11 @@ export default function VideoPlayer() {
                                         </span>
                                     ) : null}
                                     <span className="text-white/50 text-xs">
-                                        {fileInfo?.size ? `${(fileInfo.size / 1024 / 1024 / 1024).toFixed(2)} GB` : ''}
+                                        {fileInfo?.size ? (
+                                            fileInfo.size >= 1024 * 1024 * 1024 
+                                                ? `${(fileInfo.size / 1024 / 1024 / 1024).toFixed(2)} GB`
+                                                : `${(fileInfo.size / 1024 / 1024).toFixed(1)} MB`
+                                        ) : ''}
                                         {staticSpeed > 0 ? ` • ${(staticSpeed / 1024 / 1024).toFixed(1)} MB/s` : ''}
                                     </span>
                                 </div>
@@ -858,7 +870,11 @@ export default function VideoPlayer() {
                 <div className="pl-12">
                     <h1 className="font-medium text-lg text-left drop-shadow-md text-white">{torrentMeta?.title || fileInfo?.name || "Loading..."}</h1>
                     <p className="text-xs text-white/50 text-left">
-                        {streamMode === 'hls' ? 'HLS' : streamMode === 'static' ? 'Static' : 'Direct'} • {fileInfo && fileInfo.size ? (fileInfo.size / 1024 / 1024).toFixed(1) + " MB" : ""}
+                        {streamMode === 'hls' ? 'HLS' : streamMode === 'static' ? 'Static' : 'Direct'} • {fileInfo && fileInfo.size ? (
+                            fileInfo.size >= 1024 * 1024 * 1024
+                                ? `${(fileInfo.size / 1024 / 1024 / 1024).toFixed(2)} GB`
+                                : `${(fileInfo.size / 1024 / 1024).toFixed(1)} MB`
+                        ) : ""}
                     </p>
                 </div>
             </div>
