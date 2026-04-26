@@ -224,7 +224,7 @@ const searchTorrents = async (query?: string, episode?: EpisodeInfo, providerOve
     const handleProviderChange = (value: string) => {
         setSelectedProvider(value);
         if (showTorrentPanel && value) {
-            searchTorrents(undefined, undefined, value);
+            searchTorrents(torrentQuery, selectedEpisode || undefined, value);
         }
     };
 
